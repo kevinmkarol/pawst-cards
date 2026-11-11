@@ -1,0 +1,21 @@
+# Seeed's recovery images, checksums and factory Node-RED flow: local copies, not published.
+camera/factory_images/
+camera/stock/
+*.log
+__pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+# TLS cert/key mediamtx generates when started from streaming/
+streaming/auto.crt
+streaming/auto.key
+# Tailscale static build for the camera (38 MB); camera/tailscale/install.sh downloads and checks it
+tools/tailscale/
+# Your own machine addresses and delivery settings; petcam.env.example is the template
+petcam.env
+# Backup copies of it, and the launchd plist rendered from it, hold the same values
+petcam.env.*
+!petcam.env.example
+collector/macos/com.petcam.collector.plist
+collector/macos/com.petcam.page.plist

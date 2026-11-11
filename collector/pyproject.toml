@@ -1,0 +1,20 @@
+[project]
+name = "petcam-collector"
+version = "0.1.0"
+description = "Collector service: fetches pet visits from the camera, picks the best photo of each, delivers it"
+requires-python = ">=3.12"
+dependencies = ["pillow>=11", "numpy>=2"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.black]
+target-version = ["py312"]
+line-length = 100

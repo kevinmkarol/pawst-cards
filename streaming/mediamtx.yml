@@ -1,0 +1,40 @@
+# ABOUTME: mediamtx config that relays the reCamera's RTSP stream to a browser on this Mac
+# ABOUTME: over WebRTC, transcoding the camera's raw PCM audio to Opus so browsers can play it.
+#
+# The camera is reached through an SSH tunnel (local 8555 -> camera 554) because macOS
+# Local Network privacy blocks Homebrew binaries from reaching LAN hosts; localhost is exempt.
+# Path "cam" is the untouched camera stream (H264 + LPCM). When it is ready, ffmpeg republishes
+# it as path "live" with the video flipped horizontally (the sensor's picture is mirrored and the
+# camera's own mirror option has no effect) and re-encoded with VideoToolbox, and the audio
+# encoded to Opus. Browsers open /live/.
+# The camera's PCM timestamps are irregular, so aresample stretches/pads audio to keep it monotonic.
+logLevel: info
+# The control API stays off: nothing here uses it, and it can add paths that run commands.
+api: no
+
+rtsp: yes
+rtspAddress: 127.0.0.1:8554
+rtspTransports: [tcp]
+rtmp: no
+srt: no
+hls: no
+
+webrtc: yes
+webrtcAddress: 127.0.0.1:8889
+webrtcLocalUDPAddress: 127.0.0.1:8189
+webrtcIPsFromInterfaces: no
+webrtcAdditionalHosts: [127.0.0.1]
+
+paths:
+  cam:
+    # The factory's user name and password; live.sh puts the ones from petcam.env here.
+    source: rtsp://admin:admin@127.0.0.1:8555/live
+    sourceOnDemand: no
+    rtspTransport: tcp
+    runOnReady: >
+      ffmpeg -hide_banner -loglevel warning -rtsp_transport tcp
+      -i rtsp://127.0.0.1:8554/cam
+      -vf hflip -c:v h264_videotoolbox -realtime 1 -b:v 4M -af aresample=async=1:first_pts=0 -c:a libopus -b:a 64k -ar 48000 -ac 1
+      -f rtsp -rtsp_transport tcp rtsp://127.0.0.1:8554/live
+    runOnReadyRestart: yes
+  live:

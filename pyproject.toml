@@ -1,0 +1,7 @@
+# Formatter and linter settings shared by every Python project in this repository, so the
+# pre-commit hooks (which run from the repository root) agree with the per-project tools.
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100

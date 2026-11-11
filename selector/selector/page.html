@@ -1,0 +1,1982 @@
+<!doctype html>
+<!-- ABOUTME: The selector's single page: the system's health, the collector's settings, aiming the -->
+<!-- ABOUTME: camera, and rating frames to train the model that picks which photo is posted. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pawst Cards</title>
+<style>
+:root {
+  --bg: #f6f5f1; --panel: #ffffff; --ink: #1f2328; --muted: #6b7280; --line: #dcd9d0;
+  --good: #157a40; --okay: #b7791f; --best: #e0b000; --skip: #9aa0a6; --accent: #2f5fd0; --warn: #b4530a;
+  --on-accent: #ffffff;
+  --series-1: #2a78d6; --series-2: #eb6834;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #16181b; --panel: #1f2226; --ink: #e8e6e1; --muted: #9aa0a6; --line: #34383e;
+    --good: #2fa864; --okay: #c58a2c; --best: #ffd54a; --skip: #6b7280; --accent: #7ea2ff; --warn: #f0a04b;
+    --on-accent: #0d1730;
+    --series-1: #3987e5; --series-2: #d95926; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 -apple-system, "Segoe UI", sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 16px;
+  background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 16px; margin: 0 8px 0 0; }
+nav button, .btn { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); cursor: pointer; }
+nav button.on, .btn.primary, #layers .btn.on, .btn.on[data-mode] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+nav button.unsaved::after { content: " •"; color: var(--warn); }
+nav button.on.unsaved::after { color: inherit; }
+nav { display: flex; flex-wrap: wrap; gap: 4px; }
+#subnav { flex-basis: 100%; }
+#subnav button { font-size: 13px; padding: 4px 10px; }
+@media (max-width: 760px) { #summary { display: none; } }
+@media (max-width: 560px) { header h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn:disabled { opacity: .5; cursor: default; }
+#summary { margin-left: auto; color: var(--muted); font-size: 13px; }
+main { padding: 20px 16px 40px; }
+.cols { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; }
+#list { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  overflow: auto; max-height: calc(100vh - 150px); }
+@media (max-width: 760px) { .cols { grid-template-columns: 1fr; } #list { max-height: 180px; } }
+#list span:last-child { white-space: nowrap; }
+#list div { padding: 6px 10px; border-bottom: 1px solid var(--line); cursor: pointer;
+  display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+#list div.sel { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+#list .done { color: var(--good); }
+#list .gone, #list .done.none { color: var(--muted); }
+#list .tick { color: var(--good); }
+code { font: 12px ui-monospace, monospace; overflow-wrap: anywhere; }
+.bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 12px; }
+.acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.card > .acts, #camera-rows > .acts { margin: 12px 0; }
+.soft { font-weight: 400; font-size: 13px; color: var(--muted); margin-left: 6px; }
+.note { color: var(--muted); font-size: 13px; line-height: 1.45; }
+p.note, ul.note { max-width: 68ch; }
+ul.note { padding-left: 18px; margin: 8px 0 0; }
+ul.note li { margin-bottom: 4px; }
+th { font-size: 13px; vertical-align: bottom; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.tile { position: relative; border-radius: 8px; overflow: hidden; cursor: pointer;
+  outline: 4px solid transparent; outline-offset: -4px; background: #000; }
+.tile img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; }
+.tile.r1 { outline-color: var(--okay); }
+.tile.r2 { outline-color: var(--good); }
+.tile.r3 { outline-color: var(--best); outline-width: 6px; outline-offset: -6px; }
+.tile.out { outline: 4px dashed var(--skip); outline-offset: -4px; }
+.tile.out img { opacity: .45; }
+.tile.proposed { outline-style: dashed; }
+.tile .pic { position: relative; }
+/* Until the picture arrives the tile says so: a dark tile alone looks like a photo of the dark. */
+.pic .wait { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+  color: #bbb; font-size: 13px; pointer-events: none; }
+.pic.loading .wait, .pic.failed .wait { display: flex; }
+.pic.ghost { aspect-ratio: 4 / 3; background: #111; }
+.pic.loading .wait { animation: waiting 1.2s ease-in-out infinite alternate; }
+.pic.loading .box, .pic.failed .box { display: none; }
+.pic.failed .wait { color: var(--warn); }
+@keyframes waiting { from { opacity: .45; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pic.loading .wait { animation: none; } }
+.box { position: absolute; border: 2px solid #ffd54a; border-radius: 3px; pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
+.rate { display: flex; background: #111; }
+.rate button { flex: 1; font: inherit; font-size: 12px; padding: 5px 0; border: 0; cursor: pointer;
+  background: #222; color: #bbb; border-right: 1px solid #111; }
+.rate button.on { color: #fff; font-weight: 600; }
+.rate button.on[data-r="0"] { background: #555; }
+.rate button.on[data-r="1"] { background: var(--okay); }
+.rate button.on[data-r="2"] { background: var(--good); }
+.rate button.on[data-r="3"] { background: var(--best); color: #000; }
+.rate button.on[data-r="-1"] { background: var(--skip); }
+.rate a { color: #bbb; font-size: 12px; padding: 5px 8px; text-decoration: none; background: #222; }
+.tile.hidden-copy { display: none; }
+.tile:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.rate button[data-r="-1"] { margin-left: 6px; }
+@media (pointer: coarse) {
+  .rate button { padding: 12px 0; font-size: 13px; }
+  .rate a { padding: 12px 10px; font-size: 13px; }
+  nav button, .btn { padding: 9px 13px; }
+  #subnav button { padding: 7px 11px; }
+}
+.tag { position: absolute; left: 6px; top: 6px; background: rgba(0,0,0,.65); color: #fff;
+  font-size: 11px; padding: 2px 6px; border-radius: 4px; }
+.state { position: absolute; right: 6px; top: 6px; font-size: 11px; padding: 2px 6px;
+  border-radius: 4px; color: #fff; background: rgba(0,0,0,.65); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 auto;
+  max-width: max(520px, calc((100vh - 290px) * 8 / 3 + 12px)); }
+.pair button.pic { width: 100%; padding: 0; border: 0; cursor: pointer; font: inherit; color: inherit; }
+.pair figure.chosen .pic { outline: 4px solid var(--good); outline-offset: -4px; }
+.pair .under { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: 8px; font-size: 13px; }
+.pair figure { margin: 0; }
+.pair .pic { display: block; position: relative; aspect-ratio: 4 / 3; background: #111;
+  border-radius: 8px; overflow: hidden; }
+.pair img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.pair figcaption { margin-top: 6px; font-size: 13px; color: var(--muted); min-height: 1.4em; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 18px 20px; margin-bottom: 16px; max-width: 760px; }
+.card h2 { font-size: 16px; line-height: 1.3; margin: 0 0 12px; }
+.card p { margin: 0 0 10px; }
+.card > :last-child, #camera-rows > :last-child, #metrics > :last-child, #history > :last-child { margin-bottom: 0; }
+@media (max-width: 560px) { .card { padding: 14px 16px; } }
+.stack { max-width: 760px; margin: 0 auto; }
+@media (min-width: 1240px) {
+  .stack.two { max-width: 1536px; display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; align-items: start; }
+  .stack.flow { max-width: 1536px; columns: 2; column-gap: 16px; }
+  .stack.flow > .card { break-inside: avoid; }
+  .stack.flow > .whole { column-span: all; }
+}
+.unsaved-note { color: var(--warn); font-size: 13px; margin-left: 8px; }
+#aim-pic { position: relative; margin: 10px 0; aspect-ratio: 4 / 3; background: #111; border-radius: 8px; overflow: hidden; }
+#aim-pic img { display: block; width: 100%; height: 100%; object-fit: contain; }
+#aim-pic .wait { display: flex; text-align: center; padding: 0 12px; }
+#aim-pic.stale img { opacity: .5; }
+table { border-collapse: collapse; margin-bottom: 10px; }
+td, th { text-align: left; padding: 3px 18px 3px 0; font-variant-numeric: tabular-nums; }
+.err { color: var(--warn); }
+p.err:empty, p.note:empty { display: none; }
+.chart { position: relative; margin: 6px 0 4px; }
+.chart svg { display: block; width: 100%; max-width: 720px; height: auto; overflow: visible; touch-action: pan-y; }
+.chart .grid-line { stroke: var(--line); stroke-width: 1; }
+.chart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart text.end { fill: var(--ink); font-size: 12px; }
+.chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .dot { stroke: var(--panel); stroke-width: 2; }
+.chart .hair { stroke: var(--muted); stroke-width: 1; visibility: hidden; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--muted); }
+.key { display: inline-block; width: 16px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
+.key.dash { border-top-style: dashed; }
+.tip { position: absolute; top: 0; pointer-events: none; visibility: hidden; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font-size: 12px; white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,.18); z-index: 2; }
+.tip b { font-variant-numeric: tabular-nums; }
+.tip .head { color: var(--muted); margin-bottom: 3px; }
+.scroll { overflow-x: auto; }
+details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-top: 8px; }
+details[open] > summary { margin-bottom: 6px; }
+#label-how { margin-bottom: 12px; }
+tr.now td { font-weight: 600; }
+.hide { display: none !important; }
+.steps { list-style: none; margin: 0; padding: 0; }
+.steps li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px;
+  align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.steps li:first-child { border-top: 0; padding-top: 0; }
+.steps li:last-child { padding-bottom: 0; }
+.steps .mark { font-weight: 700; text-align: center; }
+.steps .done .mark { color: var(--good); }
+.steps .todo .mark { color: var(--muted); }
+.steps .stuck .mark { color: var(--warn); }
+.steps .what { font-weight: 600; }
+.steps .more { color: var(--muted); font-size: 13px; }
+a { color: var(--accent); }
+a.btn { color: var(--ink); text-decoration: none; white-space: nowrap; }
+.views { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+@media (max-width: 980px) { .views { grid-template-columns: 1fr; } }
+.views .card { max-width: none; }
+/* The map stays in sight while the controls beside it are scrolled. */
+@media (min-width: 981px) { .views .scene-card { position: sticky; top: 72px; } }
+#scene-wrap { position: relative; }
+#scene { display: block; width: 100%; height: min(540px, 68vh); border-radius: 8px; background: var(--bg);
+  cursor: grab; touch-action: none; }
+/* A finger on the map still scrolls the page; sideways it turns the map. */
+@media (pointer: coarse) { #scene { touch-action: pan-y; } }
+.views > div:last-child .field { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+#layers { gap: 6px; }
+#aim-stops .choice { justify-content: space-between; padding: 4px 0; border-top: 1px solid var(--line); }
+#aim-stops .btn { padding: 2px 10px; font-size: 13px; }
+#scene:active { cursor: grabbing; }
+#scene-tip { position: absolute; pointer-events: none; z-index: 3; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.18); max-width: 220px; }
+#scene-tip img { display: block; width: 200px; border-radius: 4px; margin-top: 6px; }
+.vlegend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 10px 0 4px;
+  font-size: 12px; color: var(--muted); }
+#legend-ramp { width: 120px; height: 10px; border-radius: 3px; }
+.vkey { display: inline-flex; align-items: center; gap: 5px; }
+.vswatch { display: inline-block; width: 18px; height: 0; border-top: 3px solid var(--series-2); }
+.vswatch.stop { width: 11px; height: 11px; border: 2px solid var(--ink); border-radius: 50%; }
+.vswatch.proposed { border-top: 2px dashed var(--muted); }
+.vswatch.now { width: 10px; height: 10px; border: 0; border-radius: 50%; background: var(--ink); }
+.slider { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.card > .slider, .card > .choice { margin-bottom: 10px; }
+.slider input { flex: 1; accent-color: var(--accent); }
+#ops-log { max-height: 300px; overflow: auto; font-size: 12px; margin-top: 6px; }
+#ops-log div { padding: 2px 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+#ops-log .WARNING, #ops-log .ERROR { color: var(--warn); }
+#views-table { max-height: 260px; overflow: auto; margin-top: 8px; font-size: 13px; }
+.field { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 6px 14px; align-items: center; margin: 10px 0; }
+@media (max-width: 560px) { .field { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+.field > label, .field > span:first-child { color: var(--muted); font-size: 13px; }
+.card input[type=text], .card input[type=url], .card input[type=number], dialog input[type=password], .card select {
+  font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); color: var(--ink); max-width: 100%; }
+.card input[type=text], .card input[type=url], dialog input[type=password] { width: 340px; }
+.card input[type=number] { width: 84px; }
+.choice { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+.choice label { display: inline-flex; gap: 6px; align-items: center; }
+.saved { color: var(--good); font-size: 13px; margin-left: 8px; }
+.fixed { font-family: ui-monospace, monospace; font-size: 13px; }
+dialog { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); padding: 16px; max-width: min(400px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(0,0,0,.4); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Pawst Cards</h1>
+  <nav aria-label="Sections">
+    <button data-tab="home" class="on">Home</button>
+    <button data-tab="label" data-group="photos">Photos</button>
+    <button data-tab="views">Camera</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+  <span id="summary"></span>
+  <nav id="subnav" class="hide" aria-label="Teaching the photo picker, step by step">
+    <button data-tab="label">1 · Rate</button>
+    <button data-tab="model">2 · Train</button>
+  </nav>
+</header>
+<main>
+  <section id="tab-home" class="stack two">
+    <div>
+    <div class="card">
+      <h2>Is it working?</h2>
+      <ol class="steps" id="steps-running"><li class="todo"><span class="mark">…</span><span class="more">Checking…</span><span></span></li></ol>
+    </div>
+    <div class="card hide" id="ops-card">
+      <h2>Postcards</h2>
+      <p id="ops-waiting"></p>
+      <div class="acts">
+        <button class="btn" id="ops-send">Send them now</button>
+        <button class="btn" id="ops-pause">Pause postcards</button>
+        <span class="saved" id="ops-said"></span>
+      </div>
+      <p id="ops-archive" class="note"></p>
+      <details><summary>Collector log</summary><div id="ops-log" class="scroll"></div></details>
+    </div>
+    </div>
+    <div class="card">
+      <h2>Better photos <span class="soft">optional</span></h2>
+      <p class="note">Teach the photo picker your taste, in this order.</p>
+      <ol class="steps" id="steps-better"><li class="todo"><span class="mark">…</span><span class="more">Checking…</span><span></span></li></ol>
+    </div>
+  </section>
+  <section id="tab-label" class="cols hide">
+    <div id="list"></div>
+    <div>
+      <div class="bar">
+        <strong id="visit-title">Pick a visit</strong>
+        <button class="btn primary" id="save" disabled>Save</button>
+        <button class="btn" id="skip" disabled>Skip</button>
+        <span class="saved" id="save-said" role="status"></span>
+        <label class="note"><input type="checkbox" id="only-new" checked> Jump to unrated</label>
+        <label class="note"><input type="checkbox" id="show-copies"> Show near-copies</label>
+      </div>
+      <p class="note" id="proposal-note"></p>
+      <details id="label-how"><summary>How rating works</summary>
+        <ul class="note">
+          <li>A dashed outline is a proposed rating, or a frame left out with ✕. Correct what is wrong, then save.</li>
+          <li><b>Best</b> and <b>good</b> are worth sending. <b>Okay</b> is the pet, but nothing
+            to send. ✕ leaves a frame out of training.</li>
+          <li>Click a photo to flip it between good and bad.</li>
+          <li>Keys: 0 to 3 rate the frame under the pointer, X leaves it out, Enter saves,
+            S skips.</li>
+        </ul></details>
+      <div class="grid" id="frames"></div>
+    </div>
+  </section>
+
+  <section id="tab-compare" class="hide">
+    <p class="note"><a href="#model">← Back to Train</a></p>
+    <div class="bar">
+      <strong id="compare-title"></strong>
+      <button class="btn" data-vote="same" disabled>No difference</button>
+      <button class="btn" id="compare-next" disabled>Next pair</button>
+    </div>
+    <p class="note">Click the photo you would rather get. Which picker chose it shows after you
+      vote. Keys: 1 left, 2 no difference, 3 right, → next.</p>
+    <div class="pair" id="pair"></div>
+    <p class="note" id="compare-note"></p>
+  </section>
+
+  <section id="tab-model" class="stack hide">
+    <div class="card">
+      <h2>1. Train</h2>
+      <p id="label-line"></p>
+      <div class="acts">
+        <button class="btn primary" id="train">Train now</button>
+        <span class="note" id="train-note"></span>
+      </div>
+      <p class="note">Replaces the current model. Runs on this computer, about a minute.</p>
+    </div>
+    <div class="card">
+      <h2>2. Test</h2>
+      <div id="metrics"></div>
+    </div>
+    <div class="card">
+      <h2>3. Test over time</h2>
+      <div id="history"></div>
+    </div>
+    <div class="card">
+      <h2>4. Blind check <span class="soft">optional</span></h2>
+      <p class="note">A second opinion: choose between the two pickers' photos without knowing
+        which is which. Votes are only counted.</p>
+      <p id="vote-line"></p>
+      <div class="acts"><a class="btn" href="#compare">Do a blind check</a></div>
+    </div>
+    <div class="card">
+      <h2>5. Which picker posts</h2>
+      <p id="active-line"></p>
+    </div>
+  </section>
+  <section id="tab-views" class="hide">
+    <div class="views">
+      <div class="card scene-card">
+        <div class="bar">
+          <b id="layers-label">Colour the map by</b>
+          <span id="layers" class="acts" role="group" aria-labelledby="layers-label">
+            <button class="btn" data-layer="photos">Best photos</button>
+            <button class="btn" data-layer="found">Pet sightings</button>
+            <button class="btn" data-layer="watched">Time watched</button>
+            <button class="btn" data-layer="next">Worth watching next</button>
+          </span>
+        </div>
+        <div id="scene-wrap">
+          <canvas id="scene" tabindex="0" aria-label="The directions around the camera, drawn as a sphere with the camera at its centre. The same numbers are in the table below."></canvas>
+          <div id="scene-tip" class="hide"></div>
+        </div>
+        <div class="vlegend">
+          <span id="legend-low"></span><span id="legend-ramp"></span><span id="legend-high"></span>
+          <span class="vkey"><i class="vswatch home"></i>home</span>
+          <span class="vkey"><i class="vswatch stop"></i>stops</span>
+          <span class="vkey"><i class="vswatch proposed"></i>learned plan</span>
+          <span class="vkey"><i class="vswatch now"></i>pointing now</span>
+        </div>
+        <p class="note" id="layer-note"></p>
+        <p class="note">Drag to turn, scroll to zoom. Each tile is a direction 10° wide; taller
+          means more.</p>
+        <details><summary>Show as a table</summary><div id="views-table"></div></details>
+      </div>
+      <div>
+        <div class="card">
+          <h2>Home and sweep</h2>
+          <div class="acts">
+            <button class="btn" data-mode="fixed">Built-in</button>
+            <button class="btn" data-mode="manual">Set by hand</button>
+            <button class="btn" data-mode="learned">Learned</button>
+          </div>
+          <p id="views-following"></p>
+          <details><summary>What these mean</summary>
+            <ul class="note">
+              <li><b>Built-in:</b> the home and patrol the camera was installed with.</li>
+              <li><b>Set by hand:</b> what you set under “Aim it by hand”.</li>
+              <li><b>Learned:</b> rests where the best photos came from and sweeps where pets
+                turn up. Updated at most every three hours.</li>
+            </ul></details>
+        </div>
+        <div class="card" id="aim-card">
+          <h2>Aim it by hand</h2>
+          <p id="aim-line">Asking the camera…</p>
+          <div id="aim-pic" class="hide"><img id="aim-img" alt="What the camera sees now"><span class="wait" id="aim-pic-wait" role="status"></span></div>
+          <div class="acts"><button class="btn" id="aim-look">Show what the camera sees</button></div>
+          <div class="field"><span>Turn</span><span class="acts">
+            <button class="btn" data-yaw="30" aria-label="Turn left 30 degrees">← 30°</button><button class="btn" data-yaw="10" aria-label="Turn left 10 degrees">← 10°</button>
+            <button class="btn" data-yaw="-10" aria-label="Turn right 10 degrees">10° →</button><button class="btn" data-yaw="-30" aria-label="Turn right 30 degrees">30° →</button></span></div>
+          <div class="field"><span>Tilt</span><span class="acts">
+            <button class="btn" data-pitch="-10" aria-label="Tilt up 10 degrees">↑ 10°</button><button class="btn" data-pitch="-5" aria-label="Tilt up 5 degrees">↑ 5°</button>
+            <button class="btn" data-pitch="5" aria-label="Tilt down 5 degrees">5° ↓</button><button class="btn" data-pitch="10" aria-label="Tilt down 10 degrees">10° ↓</button></span></div>
+          <p class="note">Turning stops it following the pet until you press <i>Follow the pet again</i>. The
+            picture updates after each turn, in a few seconds.</p>
+          <div class="acts">
+            <button class="btn" id="aim-follow">Follow the pet again</button>
+            <button class="btn" id="aim-home">Set as home</button>
+            <button class="btn" id="aim-stop">Add as stop</button>
+          </div>
+          <div id="aim-stops"></div>
+          <p class="err" id="aim-problem"></p>
+        </div>
+        <div class="card" id="explore-card">
+          <h2>How much it looks around</h2>
+          <div class="slider"><span>Proven spots</span>
+            <input type="range" id="explore" min="0" max="100" step="5" aria-label="How much the camera explores">
+            <span>New places</span></div>
+          <p id="explore-line"></p>
+          <p class="note">Toward proven spots: fewer sweeps, to places that paid off. Toward new
+            places: more sweeps, to directions barely watched. Saved when you let go.</p>
+        </div>
+        <div class="card" id="sweep-card">
+          <h2>Sweep limits</h2>
+          <div class="field"><label for="sweep-stops">Stops</label>
+            <span><input type="number" id="sweep-stops" min="0" max="16" step="1"> <span class="note">0 keeps it at home</span></span></div>
+          <div class="field"><span>Turn range</span>
+            <span><input type="number" id="sweep-yaw_low" min="0" max="360" step="5" aria-label="Lowest yaw in degrees"> to
+              <input type="number" id="sweep-yaw_high" min="0" max="360" step="5" aria-label="Highest yaw in degrees"> °</span></div>
+          <div class="field"><span>Tilt range</span>
+            <span><input type="number" id="sweep-pitch_low" min="0" max="180" step="5" aria-label="Lowest pitch in degrees"> to
+              <input type="number" id="sweep-pitch_high" min="0" max="180" step="5" aria-label="Highest pitch in degrees"> °</span></div>
+          <p class="note">Learned plans stay inside these ranges. Narrow them to keep out a
+            wall or the end of the gimbal's travel.</p>
+          <p class="note" id="sweep-short"></p>
+          <div class="acts"><button class="btn primary" id="sweep-save">Save</button><span class="saved" id="sweep-saved"></span></div>
+        </div>
+        <div class="card" id="camera-card">
+          <h2>Timings</h2>
+          <p class="err" id="camera-problem"></p>
+          <div id="camera-rows">
+            <div class="field"><label for="cam-gone_after">Visit ends when the pet is gone for</label>
+              <span><input type="number" id="cam-gone_after" step="5"> seconds <span class="note" id="cam-gone_after-was"></span></span></div>
+            <div class="field"><label for="cam-max_visit">Longest visit</label>
+              <span><input type="number" id="cam-max_visit" step="30"> seconds <span class="note" id="cam-max_visit-was"></span></span></div>
+            <div class="field"><label for="cam-confirm_sightings">Sightings that start a visit</label>
+              <span><input type="number" id="cam-confirm_sightings" step="1"> within 2 seconds <span class="note" id="cam-confirm_sightings-was"></span></span></div>
+            <div class="field"><label for="cam-home_after">Return home after</label>
+              <span><input type="number" id="cam-home_after" step="10"> quiet seconds <span class="note" id="cam-home_after-was"></span></span></div>
+            <div class="field"><label for="cam-dwell">Time at each stop</label>
+              <span><input type="number" id="cam-dwell" step="5"> seconds <span class="note" id="cam-dwell-was"></span></span></div>
+            <p class="note">Saved on the camera; applies at once.</p>
+            <div class="acts">
+              <button class="btn primary" id="camera-save">Save</button>
+              <button class="btn" id="camera-reset">Restore defaults</button>
+              <span class="saved" id="camera-saved"></span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>After moving the camera</h2>
+          <p id="moved-line"></p>
+          <div class="acts">
+            <button class="btn" id="moved">I moved the camera</button>
+            <button class="btn hide" id="unmoved">Count everything again</button>
+          </div>
+          <p class="note">Starts the map again from now. Turn exploration up for a few days.</p>
+        </div>
+        <p class="note" id="views-data"></p>
+        <p class="err" id="views-problem"></p>
+      </div>
+    </div>
+  </section>
+  <section id="tab-settings" class="stack flow hide">
+    <p class="err whole" id="settings-problem"></p>
+    <div class="card">
+      <h2>Where postcards go</h2>
+      <p id="deliver-state" class="note">Loading…</p>
+      <div class="field"><span>Send by</span>
+        <span class="choice">
+          <label><input type="radio" name="deliver" value="command" id="deliver-command"> the command in <span class="fixed">petcam.env</span></label>
+          <label><input type="radio" name="deliver" value="webhook" id="deliver-webhook"> a webhook</label>
+        </span></div>
+      <div class="field" id="command-row"><span>Command</span><span id="command-line" class="note"></span></div>
+      <div id="webhook-rows">
+        <div class="field"><label for="deliver-url">Webhook address</label>
+          <input type="url" id="deliver-url" autocomplete="off" spellcheck="false"></div>
+        <div class="field"><span>Video</span>
+          <label class="choice"><input type="checkbox" id="deliver-clips"> send the clips too</label></div>
+      </div>
+      <div class="field"><label for="deliver-pace">How often</label>
+        <span class="choice">
+          <select id="deliver-pace">
+            <option value="each">every visit, as it arrives</option>
+            <option value="held">at most once every</option>
+          </select>
+          <span id="deliver-every-wrap"><input type="number" id="deliver-every" min="1" max="10080" step="1" aria-label="Minutes between deliveries"> minutes</span>
+        </span></div>
+      <p class="note">Held visits go out as one postcard. A test uses the saved settings.</p>
+      <div class="acts">
+        <button class="btn primary" id="deliver-save">Save</button>
+        <button class="btn" id="deliver-test">Send a test postcard</button>
+        <span class="saved" id="deliver-saved"></span>
+      </div>
+      <p id="test-line" class="note"></p>
+    </div>
+    <div class="card">
+      <h2>Captions</h2>
+      <div class="field"><label for="subject">Pet's name</label>
+        <input type="text" id="subject" maxlength="40"></div>
+      <div class="field"><label for="timezone">Time zone</label>
+        <input type="text" id="timezone" list="zones" spellcheck="false"><datalist id="zones"></datalist></div>
+      <p class="note" id="caption-example"></p>
+      <div class="acts"><button class="btn primary" id="caption-save">Save</button><span class="saved" id="caption-saved"></span></div>
+    </div>
+    <div class="card">
+      <h2>Which photos are posted</h2>
+      <div class="field"><span>Chosen by</span>
+        <span class="choice">
+          <label><input type="radio" name="picker" value="heuristic" id="picker-heuristic"> the built-in picker</label>
+          <label><input type="radio" name="picker" value="model" id="picker-model"> the trained model</label>
+        </span></div>
+      <p class="note" id="picker-note"></p>
+      <p class="err" id="collector-line"></p>
+      <div class="field"><label for="post-at-least">Post when the best photo scores at least</label>
+        <span class="slider"><input type="range" id="post-at-least" min="0" max="100" step="5"><b id="post-at-least-value"></b></span></div>
+      <p class="note" id="post-note"></p>
+      <div class="field"><label for="repeat-strictness">Photos like ones already posted</label>
+        <select id="repeat-strictness">
+          <option value="0">are posted all the same</option>
+          <option value="0.5">are marked down a little</option>
+          <option value="1">are marked down</option>
+          <option value="2">are marked down hard</option>
+        </select></div>
+      <div class="field"><label for="repeat-hours">Remember posted photos for</label>
+        <span><input type="number" id="repeat-hours" min="1" max="168" step="1"> hours</span></div>
+      <p class="note">Repeats are only checked when postcards are held (How often, above).</p>
+      <div class="acts"><button class="btn primary" id="posting-save">Save</button><span class="saved" id="posting-saved"></span></div>
+    </div>
+    <div class="card">
+      <h2>Animals to look for</h2>
+      <div class="choice" id="pets"></div>
+      <p class="note">What the camera follows and the photo picker counts as the pet. Train again after changing.</p>
+      <div class="acts"><button class="btn primary" id="pets-save">Save</button><span class="saved" id="pets-saved"></span></div>
+    </div>
+    <div class="card">
+      <h2>The archive</h2>
+      <div class="field"><label for="keep-pace">Collected visits are</label>
+        <span class="choice">
+          <select id="keep-pace">
+            <option value="ever">kept for ever</option>
+            <option value="days">deleted after</option>
+          </select>
+          <span id="keep-days-wrap"><input type="number" id="keep-days" min="1" max="36500" step="1" aria-label="Days a visit is kept"> days</span>
+        </span></div>
+      <p class="note">A visit is about 100 MB. Photos you rated are kept either way.</p>
+      <div class="acts"><button class="btn primary" id="keep-save">Save</button><span class="saved" id="keep-saved"></span></div>
+    </div>
+    <p class="note whole" id="passphrase-note"></p>
+  </section>
+</main>
+<dialog id="ask">
+  <form method="dialog">
+    <p id="ask-text"></p>
+    <button class="btn primary" value="ok" id="ask-yes"></button>
+    <button class="btn" value="cancel">Cancel</button>
+  </form>
+</dialog>
+<dialog id="pass">
+  <form method="dialog">
+    <p><label for="pass-word">Passphrase, to make changes on this page</label></p>
+    <p><input type="password" id="pass-word" autocomplete="current-password"></p>
+    <p class="err" id="pass-wrong"></p>
+    <button class="btn primary" value="ok">Continue</button>
+    <button class="btn" value="cancel" formnovalidate>Cancel</button>
+  </form>
+</dialog>
+<script>
+const $ = (id) => document.getElementById(id);
+// The passphrase, once given, is kept for this browser tab only.
+let passphrase = "";
+try { passphrase = sessionStorage.getItem("pawst-passphrase") || ""; } catch (error) { /* private window */ }
+function askPassphrase(wrong) {
+  return new Promise((resolve) => {
+    const dialog = $("pass");
+    $("pass-wrong").textContent = wrong ? "That was not it." : "";
+    $("pass-word").value = "";
+    dialog.returnValue = "cancel";
+    dialog.onclose = () => resolve(dialog.returnValue === "ok" ? $("pass-word").value : null);
+    dialog.showModal();
+  });
+}
+// Asked before something that is not undone with another press. Resolves true for yes.
+function sure(text, yes) {
+  return new Promise((resolve) => {
+    const dialog = $("ask");
+    $("ask-text").textContent = text;
+    $("ask-yes").textContent = yes;
+    dialog.returnValue = "cancel";
+    dialog.onclose = () => resolve(dialog.returnValue === "ok");
+    dialog.showModal();
+  });
+}
+const api = async (path, body) => {
+  for (let attempt = 0; ; attempt++) {
+    const headers = { "Content-Type": "application/json" };
+    if (passphrase) headers["X-Pawst-Passphrase"] = encodeURIComponent(passphrase);
+    const response = await fetch(path, body === undefined ? {} : { method: "POST", headers, body: JSON.stringify(body) });
+    const data = await response.json();
+    if (response.status === 401 && body !== undefined) {
+      const given = await askPassphrase(attempt > 0);
+      if (given === null) throw new Error("nothing was changed: the passphrase was not given");
+      passphrase = given;
+      try { sessionStorage.setItem("pawst-passphrase", given); } catch (error) { /* private window */ }
+      continue;
+    }
+    if (!response.ok) throw new Error(data.error || response.statusText);
+    return data;
+  }
+};
+const img = (key, name, w) => `/img?key=${encodeURIComponent(key)}&name=${encodeURIComponent(name)}&w=${w}`;
+const when = (t) => t ? new Date(t * 1000).toLocaleString([], { weekday: "short", month: "short",
+  day: "numeric", hour: "numeric", minute: "2-digit" }) : "unknown time";
+const pct = (v) => v === null || v === undefined ? "n/a" : Math.round(v * 100) + "%";
+
+let status = null, visits = [], current = null, marks = {}, tab = "home";
+
+// Tabs.
+const TABS = ["home", "label", "compare", "model", "views", "settings"];
+// Rating and training are one piece of work, under one button with two steps.
+const PHOTOS = ["label", "model", "compare"];
+// The steps with a button of their own; the blind check is reached from the Train step.
+const STEPS = ["label", "model"];
+let homeTimer = null, settingsTimer = null, photosAt = "label";
+document.querySelectorAll("nav button").forEach((button) => button.onclick = () => {
+  const to = button.dataset.group === "photos" ? photosAt : button.dataset.tab;
+  if (location.hash.slice(1) === to) show(to);
+  else location.hash = to;
+});
+function show(name) {
+  // A tab opens at its top, not where the last one was left.
+  if (name !== tab) window.scrollTo(0, 0);
+  tab = name;
+  if (STEPS.includes(name)) photosAt = name;
+  document.querySelectorAll("nav button").forEach((b) => {
+    const on = b.dataset.group === "photos" ? PHOTOS.includes(name) : b.dataset.tab === name;
+    b.classList.toggle("on", on);
+    if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+  });
+  $("subnav").classList.toggle("hide", !PHOTOS.includes(name));
+  for (const id of TABS) $("tab-" + id).classList.toggle("hide", id !== name);
+  clearInterval(viewTimer);
+  clearInterval(homeTimer);
+  clearInterval(settingsTimer);
+  if (name === "settings") { loadSettings(); settingsTimer = setInterval(loadSettings, 5000); }
+  if (name === "home") { loadHome(); homeTimer = setInterval(loadHome, 30000); }
+  if (name === "views") { loadViews(); loadAim(); loadCamera(); viewTimer = setInterval(() => { loadViews(); loadAim(); if (cameraDown) loadCamera(); }, 15000); }
+  if (name === "label") loadVisits(visitsLoaded);
+  if (name === "compare") loadCompare();
+  if (name === "model") refreshStatus();
+}
+
+// Edits that have not been saved: said beside the card's Save button and on the tab's button,
+// and asked about before the page is closed. They stay in place while another tab is open.
+const EDITED = { "deliver-saved": "settings", "caption-saved": "settings", "posting-saved": "settings",
+  "pets-saved": "settings", "keep-saved": "settings", "sweep-saved": "views", "camera-saved": "views" };
+function markEdits() {
+  for (const name of ["settings", "views"]) {
+    const any = Object.keys(EDITED).some((id) => EDITED[id] === name && $(id).closest(".card").dataset.edited);
+    const button = document.querySelector(`nav button[data-tab="${name}"]`);
+    button.classList.toggle("unsaved", any);
+    button.title = any ? "Has changes that are not saved yet" : "";
+  }
+}
+function edited(noteId, yes) {
+  const note = $(noteId), card = note.closest(".card");
+  if (yes) { card.dataset.edited = "1"; note.className = "unsaved-note"; note.textContent = "Not saved yet."; }
+  else delete card.dataset.edited;
+  markEdits();
+}
+for (const id of Object.keys(EDITED)) {
+  const card = $(id).closest(".card");
+  for (const kind of ["input", "change"]) card.addEventListener(kind, (event) => {
+    if (event.target.matches("input, select")) edited(id, true);
+  });
+}
+window.addEventListener("beforeunload", (event) => {
+  if (document.querySelector(".card[data-edited]")) event.preventDefault();
+});
+
+// Home: what is running, and what to do next.
+const ago = (seconds) => seconds < 90 ? "a moment ago" : seconds < 5400 ? Math.round(seconds / 60) + " minutes ago" :
+  seconds < 172800 ? Math.round(seconds / 3600) + " hours ago" : Math.round(seconds / 86400) + " days ago";
+function step(state, what, more, goto, label) {
+  const mark = { done: "✓", todo: "○", stuck: "!" }[state];
+  const word = { done: "Done", todo: "To do", stuck: "Needs attention" }[state];
+  return `<li class="${state}"><span class="mark" title="${word}" aria-label="${word}">${mark}</span>` +
+    `<span><span class="what">${what}</span><br><span class="more">${more}</span></span>` +
+    (goto ? `<a class="btn" href="#${goto}">${label}</a>` : "<span></span>") + "</li>";
+}
+const escapeText = (text) => String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const gigabytes = (bytes) => bytes === null || bytes === undefined ? "an unknown amount" : (bytes / 1e9).toFixed(bytes < 1e10 ? 1 : 0) + " GB";
+let opsPaused = false, opsWaiting = 0;
+// What is waiting to be sent, the pause switch, the archive's size and the collector's log.
+function drawOps(home) {
+  const c = home.collector;
+  // A collector from before it counted what waits says nothing useful here.
+  const able = !!c && typeof c.waiting === "number";
+  $("ops-card").classList.toggle("hide", !able);
+  if (!able) return;
+  opsPaused = c.paused === true;
+  // Its status is written between passes and a pass over a backlog is long, so a fresh log
+  // line counts as a sign of life too.
+  const heard = Math.max(c.at || 0, ...home.log.map((entry) => entry.at || 0));
+  const quiet = heard ? home.now - heard : null;
+  const waiting = opsWaiting = c.waiting || 0, count = `${waiting} ${waiting === 1 ? "visit" : "visits"} waiting`;
+  let line = quiet !== null && quiet > 900
+    ? `The collector last reported ${ago(quiet)} and may have stopped (README, “When things go wrong”). `
+    : "";
+  if (opsPaused) line += `Paused. ${count}; they go out together when you resume.`;
+  else if (!waiting) line += "Nothing waiting to be sent.";
+  else line += count + (c.next_delivery_at ? (c.next_delivery_at <= home.now ? ", going out any moment." : `, going out around ${when(c.next_delivery_at)}.`) : ".");
+  if (c.dry_run) line += " Dry run: the collector logs instead of sending.";
+  $("ops-waiting").textContent = line;
+  $("ops-send").classList.toggle("hide", opsPaused || !waiting);
+  $("ops-pause").textContent = opsPaused ? "Resume postcards" : "Pause postcards";
+  $("ops-pause").classList.toggle("primary", opsPaused);
+  $("ops-archive").innerHTML = `Archive: ${home.collected} visits, ${gigabytes(home.archive_bytes)}; ${gigabytes(home.disk_free_bytes)} free. ` +
+    (c.keep_visits_days ? `Kept ${c.keep_visits_days} days` : "Kept for ever") + ` (<a href="#settings">change</a>).`;
+  $("ops-log").innerHTML = home.log.length
+    ? home.log.slice().reverse().map((entry) => `<div class="${escapeText(entry.level)}">${when(entry.at)} · ${escapeText(entry.text)}</div>`).join("")
+    : `<div class="note">Nothing logged since the collector started.</div>`;
+}
+async function ops(change, said) {
+  $("ops-said").className = "saved"; $("ops-said").textContent = "";
+  try { await api("/api/settings", change); }
+  catch (error) { $("ops-said").className = "err"; $("ops-said").textContent = ` Not done: ${error.message || error}`; return; }
+  $("ops-said").textContent = said;
+  // The collector acts at its next poll; show what it then reports.
+  setTimeout(() => { $("ops-said").textContent = ""; if (tab === "home") loadHome(); }, 17000);
+}
+$("ops-send").onclick = async () => {
+  if (await sure(opsWaiting === 1 ? "Send the waiting visit now?" : `Send the ${opsWaiting} waiting visits now, as one postcard?`, "Send now"))
+    ops({ send_now: true }, "Asked. They go out within 15 seconds.");
+};
+$("ops-pause").onclick = () => ops({ paused: !opsPaused }, opsPaused ? "Resuming within 15 seconds." : "Pausing within 15 seconds.");
+
+// Whether the camera runs the agent code this copy of the repository holds.
+let runningSteps = [], cameraCode = null;
+const DEPLOY_AGENT = "camera/agent/deploy.sh && camera/agent/install_service.sh";
+function codeStep() {
+  const c = cameraCode;
+  // Nothing to say when the camera is out of reach (the first line says so) or there is no code to compare with.
+  if (!c || c.problem || !c.here) return "";
+  if (!c.camera) return step("todo", "Camera software is up to date", `The camera's agent is too old to say. Deploy it once: <code>${DEPLOY_AGENT}</code>`);
+  return c.camera === c.here
+    ? step("done", "Camera software is up to date", "It matches the code on this computer.")
+    : step("stuck", "Camera software is out of date", `It differs from the code on this computer. From the repository, run: <code>${DEPLOY_AGENT}</code>`);
+}
+function drawRunning() { $("steps-running").innerHTML = runningSteps.join("") + codeStep(); }
+
+async function loadHome() {
+  let home, state;
+  try { [home, state] = await Promise.all([api("/api/home"), api("/api/status")]); }
+  catch (error) {
+    $("steps-running").innerHTML = step("stuck", "This page could not read its data", escapeText(error.message));
+    return;
+  }
+  const heard = home.camera_heard_at === null ? null : home.now - home.camera_heard_at;
+  runningSteps = [
+    heard === null
+      ? step("todo", "The camera is answering", "Not reached yet. Install the camera software and the collector (README, steps 1 to 5).")
+      : heard < 600
+        ? step("done", "The camera is answering", `Heard from it ${ago(heard)}.`)
+        : step("stuck", "The camera is not answering", `Last heard from ${ago(heard)}. Check its power and network, then the collector (README, “When things go wrong”).`)
+    ,
+    !home.collected
+      ? step("todo", "Visits are being collected", "None yet. The first arrives about a minute after a pet leaves the picture.")
+      : step("done", "Visits are being collected", `${home.collected} in the archive, latest ${when(home.collected_at)}.`)
+    ,
+    !home.delivered
+      ? step(home.collected ? "stuck" : "todo", "Photos are being sent to you", home.collected
+          ? "Visits are collected but nothing was sent. Check Settings and the collector log below."
+          : "Nothing to send yet.")
+      : step("done", "Photos are being sent to you", `${home.delivered} sent, latest ${when(home.delivered_at)}.`),
+  ];
+  drawRunning();
+  // Asked apart from the rest: a camera that is out of reach takes seconds to say so.
+  api("/api/camera/code").then((code) => { cameraCode = code; if (tab === "home") drawRunning(); }).catch(() => {});
+
+  drawOps(home);
+
+  const r = state.ratings, good = r[2] + r[3], lower = r[0] + r[1];
+  const enough = good >= home.fewest_of_each && lower >= home.fewest_of_each && state.visits >= home.fewest_visits;
+  const model = state.model && !state.model_outdated;
+  const need = `${good} rated good or best and ${lower} lower, from ${state.visits} visits.` + (enough ? "" :
+    ` Training needs ${home.fewest_of_each} of each, from ${home.fewest_visits} visits.`);
+  $("steps-better").innerHTML = [
+    !home.collected
+      ? step("todo", "Rate some photos", "Nothing to rate until a visit is collected.")
+      : step(enough ? "done" : "todo", "Rate some photos", need,
+          "label", enough ? "Rate more" : "Rate photos"),
+    model
+      ? step("done", "Train the model", `Trained ${when(state.model.trained_at)} on ${state.model.visits} visits.`, "model", "Train again")
+      : step("todo", "Train the model", state.model_outdated
+          ? "Made by an older version. Train it again."
+          : enough ? "You have enough ratings. About a minute." : "After rating.",
+          enough || state.model_outdated ? "model" : "", "Train"),
+    !model
+      ? step("todo", "Let the model choose the photos", "After training. The built-in picker chooses until then.")
+      : step(state.active === "model" ? "done" : "todo", "Let the model choose the photos",
+          state.active === "model" ? "The trained model is choosing."
+            : "The built-in picker is choosing. Switch once the test under Train favours the model.",
+          "settings", "Choose picker"),
+    home.aim === "learned"
+      ? step("done", "Let the camera aim itself", "It rests and sweeps where pets turn up.", "views", "Open Camera")
+      : step("todo", "Let the camera aim itself", "After a few days of watching, it can rest and sweep where pets turn up.", "views", "Open Camera"),
+  ].join("");
+}
+
+// A picture's frame says "Loading…" until the picture is there, and says so if it never comes.
+function watch(pic) {
+  const picture = pic.querySelector("img");
+  const arrived = () => pic.classList.remove("loading");
+  picture.onload = arrived;
+  picture.onerror = () => {
+    arrived(); pic.classList.add("failed");
+    pic.querySelector(".wait").textContent = "This picture could not be loaded";
+  };
+  if (picture.complete && picture.naturalWidth) arrived();
+}
+const ghosts = (count, text) => Array.from({ length: count }, () =>
+  `<div class="tile"><div class="pic ghost loading"><span class="wait" role="status">${text}</span></div></div>`).join("");
+const preload = (key, name, width) => { new Image().src = img(key, name, width); };
+
+// Status and the model tab.
+const PICKER = { model: "trained model", heuristic: "built-in picker" };
+async function refreshStatus(data) {
+  status = data || await api("/api/status");
+  // A new model proposes different ratings and picks: what was fetched under the old one goes.
+  const trained = status.model ? status.model.name : null;
+  if (trained !== knownModel) {
+    knownModel = trained; details.clear();
+    if (compare) { compare = null; if (tab === "compare") loadCompare(); }
+  }
+  const [bad, okay, good, best] = status.ratings;
+  const counts = `${best} best, ${good} good, ${okay} okay, ${bad} bad`;
+  const posting = status.active === "model" && status.collector_ready ? "model" : "heuristic";
+  $("summary").textContent = `${status.visits} visits rated · ${counts} · posting now: ${PICKER[posting]}`;
+  $("active-line").innerHTML = `Posting now: <b>${PICKER[status.active]}</b>. <a href="#settings">Change in Settings</a>.`;
+  $("collector-line").textContent = status.active !== "model" || status.collector_ready ? "" :
+    "Not in effect yet: the collector is an older version. Install it again (on a Mac: collector/macos/deploy.sh --local).";
+  $("label-line").textContent = `${bad + okay + good + best} frames rated, from ${status.visits} visits.`;
+  $("train").disabled = status.training;
+  $("train-note").textContent = status.training ?
+    "Training… The first run downloads about 350 MB." : "";
+  $("train-note").className = "note";
+  if (status.training_error) { $("train-note").textContent = status.training_error; $("train-note").className = "err"; }
+  $("metrics").innerHTML = testReport(status);
+  drawHistory(status.history || []);
+  const v = status.votes, cast = v.model + v.heuristic + v.same;
+  $("vote-line").innerHTML = !cast ? "No votes on this model yet." :
+    `${cast} ${cast === 1 ? "vote" : "votes"}: <b>trained model</b> ${v.model}, <b>built-in picker</b> ${v.heuristic}, no difference ${v.same}.`;
+  clearTimeout(trainingPoll);
+  if (status.training) trainingPoll = setTimeout(pollTraining, 1500);
+}
+let trainingPoll = 0;
+// One answer that does not come must not end the asking.
+const pollTraining = () => refreshStatus().catch(() => { trainingPoll = setTimeout(pollTraining, 5000); });
+function testReport(status) {
+  const m = status.model;
+  if (!m) return `<p class="note">${status.model_outdated ?
+    "The earlier model was made by an older version. Train again." :
+    "Nothing to show until a model is trained."}</p>`;
+  const k = m.metrics, n = k.visits_with_a_choice, hn = k.heuristic_visits;
+  const about = `Model <b>${m.name}</b>: a linear scorer on CLIP ${String(m.backbone || "").split("/")[0].replace("-quickgelu", "").replace("ViT-B-32", "ViT-B/32")}, ` +
+    `trained on ${m.good + m.bad} rated frames from ${m.visits} visits.`;
+  if (!n) return `<p>No rated visit can test it yet: a visit counts when you rated one frame good or best and one lower.</p>`;
+  const cell = (share, of) => share === null || share === undefined ? "n/a" : `${Math.round(share * of)} of ${of} (${pct(share)})`;
+  const anyBest = status.ratings[3] > 0;
+  const lead = k.model_picks_good - (k.heuristic_picks_good ?? 0);
+  const verdict = k.heuristic_picks_good === null ? "" :
+    Math.abs(lead) < 0.005 ? "The two pickers did equally well." :
+    lead > 0 ? "The trained model did better." : "The built-in picker did better.";
+  return `
+    <p><b>${verdict}</b> ${n < 30 ? `<span class="note">Only ${n} visits: a rough indication.</span>` : ""}</p>
+    <p class="note">On ${n} rated visits, how often each picker chose a photo you like.</p>
+    <table>
+      <tr><th>Picker</th><th>Good or best</th>${anyBest ? "<th>Your top frame</th>" : ""}</tr>
+      <tr><td><b>Trained model</b></td><td>${cell(k.model_picks_good, n)}</td>${anyBest ? `<td>${cell(k.model_picks_top, n)}</td>` : ""}</tr>
+      <tr><td><b>Built-in picker</b></td><td>${cell(k.heuristic_picks_good, hn)}</td>${anyBest ? `<td>${cell(k.heuristic_picks_top, hn)}</td>` : ""}</tr>
+      <tr><td>Picking blindly</td><td>${pct(k.random_picks_good)}</td>${anyBest ? `<td>${pct(k.random_picks_top)}</td>` : ""}</tr>
+    </table>
+    ${hn < n ? `<p class="note">Built-in picker: counted on ${hn} of the ${n} visits; you did not rate its pick in the other ${n - hn}.</p>` : ""}
+    <details><summary>How to read this</summary>
+    <ul class="note">
+      <li>${about}</li>
+      <li>A visit counts when you rated one frame good or best and another lower than your top one.</li>
+      <li><b>Trained model:</b> each visit is judged by a copy of the model trained without that visit.</li>
+      <li><b>Built-in picker:</b> the frame its scoring picked, posted or not.</li>
+      <li><b>Picking blindly:</b> what a random frame would score. Both pickers should beat it.</li>
+      ${anyBest ? "" : "<li>A second column, “chose your highest-rated frame”, appears once you have rated some frames <b>best</b>.</li>"}
+      <li><b>Ordering:</b> of ${k.pairs} same-visit pairs you rated differently, the model scored your
+        higher-rated frame higher in ${pct(k.pairs_right)} (50% is guessing).</li>
+    </ul></details>`;
+}
+
+// The test results of every training run, as a line per picker.
+const SERIES = [
+  { id: "model", name: "Trained model", color: "var(--series-1)", value: (k) => k.model_picks_good },
+  { id: "heuristic", name: "Built-in picker", color: "var(--series-2)", value: (k) => k.heuristic_picks_good },
+  { id: "random", name: "Picking blindly", color: "var(--muted)", dash: true, value: (k) => k.random_picks_good },
+];
+const SVG = "http://www.w3.org/2000/svg";
+function el(name, attrs, text) {
+  const node = document.createElementNS(SVG, name);
+  for (const [key, value] of Object.entries(attrs || {})) node.setAttribute(key, value);
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+const known = (v) => v !== null && v !== undefined;
+let historyDrawn = "";
+function drawHistory(runs) {
+  // Redrawn only when the runs change, so a status refresh does not drop the hover.
+  const root = $("history");
+  // Drawn at the card's own width so the text keeps its size on a phone; nothing to measure
+  // while the tab is hidden.
+  const width = root.clientWidth;
+  if (!width) return;
+  const signature = width + runs.map((run) => run.name + run.current).join();
+  if (signature === historyDrawn) return;
+  historyDrawn = signature;
+  root.innerHTML = "";
+  if (!runs.length) {
+    root.innerHTML = `<p class="note">Nothing to show until a model is trained.</p>`;
+    return;
+  }
+  const intro = document.createElement("p");
+  intro.className = "note";
+  intro.textContent = "Share of test visits where the pick was good or best, one point per training run.";
+  root.appendChild(intro);
+  const legend = document.createElement("div");
+  legend.className = "legend";
+  for (const series of SERIES) {
+    const item = document.createElement("span");
+    const key = document.createElement("span");
+    key.className = "key" + (series.dash ? " dash" : "");
+    key.style.borderTopColor = series.color;
+    item.append(key, series.name);
+    legend.appendChild(item);
+  }
+  root.appendChild(legend);
+
+  const W = Math.max(320, Math.min(720, width)), narrow = W < 520;
+  const H = 270, left = 38, right = narrow ? 44 : 150, top = 14, bottom = 40;
+  const plotW = W - left - right, plotH = H - top - bottom;
+  const x = (i) => left + (runs.length === 1 ? plotW / 2 : (i * plotW) / (runs.length - 1));
+  const y = (v) => top + plotH * (1 - v);
+  const wrap = document.createElement("div");
+  wrap.className = "chart";
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img",
+    "aria-label": "Test results of each training run; the same numbers are in the table below." });
+  for (const tick of [0, 0.25, 0.5, 0.75, 1]) {
+    svg.appendChild(el("line", { class: "grid-line", x1: left, x2: left + plotW, y1: y(tick), y2: y(tick) }));
+    svg.appendChild(el("text", { x: left - 6, y: y(tick) + 4, "text-anchor": "end" }, Math.round(tick * 100) + "%"));
+  }
+  const every = Math.ceil(runs.length / 10);
+  runs.forEach((run, i) => {
+    if (i % every === 0 || i === runs.length - 1)
+      svg.appendChild(el("text", { x: x(i), y: top + plotH + 16, "text-anchor": "middle" }, run.visits));
+  });
+  svg.appendChild(el("text", { x: left + plotW / 2, y: H - 4, "text-anchor": "middle" }, "visits rated when the model was trained"));
+  const hair = el("line", { class: "hair", y1: top, y2: top + plotH });
+  svg.appendChild(hair);
+  const ends = [];
+  for (const series of SERIES) {
+    const points = runs.map((run, i) => [i, series.value(run.metrics)]).filter(([, v]) => known(v));
+    if (!points.length) continue;
+    // A run with no value for this picker breaks its line instead of bridging the gap.
+    let path = "", previous = -2;
+    for (const [i, v] of points) { path += `${i === previous + 1 ? "L" : "M"}${x(i)} ${y(v)}`; previous = i; }
+    const line = el("path", { class: "series", d: path, stroke: series.color });
+    if (series.dash) { line.setAttribute("stroke-dasharray", "5 4"); line.setAttribute("stroke-width", 1.5); }
+    svg.appendChild(line);
+    if (!series.dash) for (const [i, v] of points)
+      svg.appendChild(el("circle", { class: "dot", cx: x(i), cy: y(v), r: 4.5, fill: series.color }));
+    const [lastAt, last] = points[points.length - 1];
+    if (lastAt === runs.length - 1) ends.push({ at: y(last), text: narrow ? pct(last) : `${series.name} ${pct(last)}` });
+  }
+  // End labels name each line at its latest value; ones that would overlap are moved apart.
+  ends.sort((a, b) => a.at - b.at);
+  for (let i = 1; i < ends.length; i++) ends[i].at = Math.max(ends[i].at, ends[i - 1].at + 15);
+  for (let i = ends.length - 2; i >= 0; i--) if (ends[i + 1].at > top + plotH) {
+    ends[i + 1].at = Math.min(ends[i + 1].at, top + plotH); ends[i].at = Math.min(ends[i].at, ends[i + 1].at - 15);
+  }
+  for (const end of ends) svg.appendChild(el("text", { class: "end", x: x(runs.length - 1) + 12, y: end.at + 4 }, end.text));
+  const tip = document.createElement("div");
+  tip.className = "tip";
+  const hit = el("rect", { x: left - 12, y: top, width: plotW + 24, height: plotH + 22, fill: "transparent", tabindex: 0 });
+  svg.appendChild(hit);
+  const showAt = (i) => {
+    const run = runs[i], k = run.metrics;
+    hair.setAttribute("x1", x(i)); hair.setAttribute("x2", x(i)); hair.style.visibility = "visible";
+    tip.innerHTML = "";
+    const head = document.createElement("div");
+    head.className = "head";
+    head.textContent = `${when(run.trained_at)}${run.current ? " · in use now" : ""} · ${run.visits} visits rated, ${k.visits_with_a_choice} in the test`;
+    tip.appendChild(head);
+    for (const series of SERIES) {
+      const row = document.createElement("div"), key = document.createElement("span"), value = document.createElement("b");
+      key.className = "key" + (series.dash ? " dash" : "");
+      key.style.borderTopColor = series.color;
+      value.textContent = pct(series.value(k));
+      row.append(key, value, " " + series.name);
+      tip.appendChild(row);
+    }
+    const scale = wrap.clientWidth / W, at = x(i) * scale;
+    tip.style.visibility = "visible";
+    tip.style.left = Math.max(0, Math.min(at + 12 + tip.offsetWidth > wrap.clientWidth ? at - 12 - tip.offsetWidth : at + 12,
+      wrap.clientWidth - tip.offsetWidth)) + "px";
+    hit.dataset.at = i;
+  };
+  const hide = () => { hair.style.visibility = "hidden"; tip.style.visibility = "hidden"; };
+  hit.addEventListener("pointermove", (event) => {
+    const box = svg.getBoundingClientRect(), px = ((event.clientX - box.left) / box.width) * W;
+    let nearest = 0;
+    runs.forEach((_, i) => { if (Math.abs(x(i) - px) < Math.abs(x(nearest) - px)) nearest = i; });
+    showAt(nearest);
+  });
+  hit.addEventListener("pointerleave", hide);
+  hit.addEventListener("focus", () => showAt(runs.length - 1));
+  hit.addEventListener("blur", hide);
+  hit.addEventListener("keydown", (event) => {
+    const step = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+    if (!step) return;
+    event.preventDefault(); event.stopPropagation();
+    showAt(Math.max(0, Math.min(runs.length - 1, Number(hit.dataset.at || 0) + step)));
+  });
+  wrap.append(svg, tip);
+  root.appendChild(wrap);
+
+  const notes = document.createElement("ul");
+  notes.className = "note";
+  const first = runs[0].metrics.visits_with_a_choice, latest = runs[runs.length - 1].metrics.visits_with_a_choice;
+  for (const text of [
+    runs.length === 1 ? "One training run so far. The lines appear from the second run." : "",
+    "The built-in picker itself never changes. Its line moves only because the test grows: each run is tested on " +
+      `every visit you had rated by then (${first} test visits at the first run, ${latest} at the latest).`,
+    "The trained model's line moves for both reasons: more visits in the test, and a model that has learned from more ratings.",
+    latest > 0 && latest < 30 ? `With ${latest} test visits, one visit going the other way moves a line by about ${Math.round(100 / latest)} points, so small rises and dips are noise.` : "",
+  ]) if (text) { const item = document.createElement("li"); item.textContent = text; notes.appendChild(item); }
+  const reading = document.createElement("details"), readingTitle = document.createElement("summary");
+  readingTitle.textContent = "How to read this";
+  reading.append(readingTitle, notes);
+  root.appendChild(reading);
+
+  const details = document.createElement("details"), summary = document.createElement("summary");
+  summary.textContent = "Show as a table";
+  const scroll = document.createElement("div"), table = document.createElement("table");
+  scroll.className = "scroll";
+  const row = (cells, tag, now) => {
+    const tr = document.createElement("tr");
+    if (now) tr.className = "now";
+    for (const cell of cells) { const td = document.createElement(tag); td.textContent = cell; tr.appendChild(td); }
+    table.appendChild(tr);
+  };
+  row(["Trained", "Visits rated", "Test visits", "Model: good or best", "Built-in: good or best", "Blind pick",
+    "Model: your top frame", "Built-in: your top frame", "Pairs ordered your way"], "th");
+  for (const run of [...runs].reverse()) {
+    const k = run.metrics;
+    row([when(run.trained_at) + (run.current ? " (in use)" : ""), run.visits, k.visits_with_a_choice, pct(k.model_picks_good),
+      pct(k.heuristic_picks_good), pct(k.random_picks_good), pct(k.model_picks_top), pct(k.heuristic_picks_top),
+      pct(k.pairs_right)], "td", run.current);
+  }
+  scroll.appendChild(table);
+  details.append(summary, scroll);
+  root.appendChild(details);
+}
+$("train").onclick = async () => {
+  if (status && status.model && !await sure("Train a new model on your ratings? It takes the place of the current one. About a minute.", "Train")) return;
+  try { refreshStatus(await api("/api/train", {})); } catch (e) { alertLine(e); }
+};
+function alertLine(error) { $("train-note").textContent = error.message; $("train-note").className = "err"; }
+
+// Labelling.
+let visitsLoaded = false, knownModel = null;
+function drawRow(visit) {
+  const row = document.createElement("div");
+  row.dataset.key = visit.key;
+  row.className = (visit.labelled ? "done " : "") + (visit.labelled && !visit.good ? "none " : "") + (visit.in_archive ? "" : "gone ") + (current && current.key === visit.key ? "sel" : "");
+  row.innerHTML = `<span>${when(visit.started_at)}${visit.withheld ? " · not posted" : ""}</span><span>${!visit.labelled ? visit.frames + " frames" : `<b class="tick">✓</b> ` + (visit.good ? visit.good + " good" : "none good")}</span>`;
+  row.onclick = () => openVisit(visit.key);
+  return row;
+}
+async function loadVisits(keep) {
+  const list = $("list");
+  if (!visitsLoaded) list.innerHTML = `<div class="note">Loading visits…</div>`;
+  try { visits = await api("/api/visits"); }
+  catch (error) {
+    if (!visitsLoaded) list.innerHTML = `<div class="err">The visits could not be listed: ${escapeText(error.message || error)}</div>`;
+    return;
+  }
+  visitsLoaded = true;
+  const scrolled = list.scrollTop;
+  list.replaceChildren(...visits.map(drawRow));
+  list.scrollTop = scrolled;
+  if (!visits.length) {
+    $("visit-title").textContent = "No visits yet";
+    $("proposal-note").textContent = "Visits show up here once the collector has fetched one. If none appear, check Home.";
+    return;
+  }
+  if (!keep || !current) {
+    const first = visits.find((v) => !v.labelled) || visits[0];
+    if (first && !(current && current.key === first.key)) openVisit(first.key);
+  }
+}
+// What the server says of a visit's frames. Finding the pet in a visit's frames for the first
+// time takes seconds, so the next visit is asked for while this one is being rated.
+const details = new Map();
+function visitDetail(key) {
+  if (!details.has(key)) {
+    const asked = api("/api/visit?key=" + encodeURIComponent(key));
+    asked.catch(() => details.delete(key));
+    details.set(key, asked);
+    if (details.size > 8) details.delete(details.keys().next().value);
+  }
+  return details.get(key);
+}
+const NAMES = { "-1": "left out", 0: "bad", 1: "okay", 2: "good", 3: "best" };
+let touched = new Set(), hovered = null, opening = 0;
+async function openVisit(key) {
+  // Examining a visit takes seconds; if another visit is asked for meanwhile, this one is dropped.
+  const mine = ++opening;
+  current = null;
+  $("visit-title").textContent = "Finding the pet in each frame…";
+  const listed = visits.find((v) => v.key === key);
+  $("frames").innerHTML = ghosts(Math.min(listed ? listed.frames : 0, 12), "Finding the pet…");
+  $("proposal-note").textContent = "";
+  $("save").disabled = $("skip").disabled = true;
+  let detail;
+  try { detail = await visitDetail(key); }
+  catch (error) {
+    if (mine === opening) {
+      $("visit-title").textContent = "This visit could not be opened";
+      $("frames").innerHTML = "";
+      $("proposal-note").textContent = `${error.message || error}. Pick another visit, or look at the page's log.`;
+    }
+    return;
+  }
+  if (mine !== opening) return;
+  current = detail;
+  marks = {}; touched = new Set(); hovered = null;
+  for (const frame of current.frames) {
+    marks[frame.name] = current.labelled ? (frame.rating === null ? -1 : frame.rating) : frame.proposed;
+  }
+  document.querySelectorAll("#list div").forEach((row) => row.classList.toggle("sel", row.dataset.key === key));
+  const selected = document.querySelector("#list div.sel");
+  if (selected) selected.scrollIntoView({ block: "nearest" });
+  $("visit-title").textContent = when(current.started_at) + (current.labelled ? " (rated)" : "");
+  $("save").disabled = $("skip").disabled = false;
+  const copies = current.frames.filter((f) => !shown(f)).length;
+  $("proposal-note").textContent =
+    (current.withheld ? "Not posted: nothing scored as good, or it repeated a photo already sent. " : "") +
+    (current.pets ? `Pet in ${current.pets} of ${current.frames.length} frames. ` : "No pet found. ") +
+    (current.labelled ? "Your saved ratings. " :
+      current.scored_by === "model" ? "Proposed by your model. " : "Proposed by a rule of thumb. ") +
+    (copies ? `${copies} near-copies hidden.` : "");
+  const grid = $("frames");
+  grid.innerHTML = "";
+  current.frames.forEach((frame, at) => {
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    tile.tabIndex = 0;
+    tile.dataset.name = frame.name;
+    tile.dataset.at = at + 1;
+    const box = frame.box ? `<div class="box" style="left:${frame.box[0] * 100}%;top:${frame.box[1] * 100}%;` +
+      `width:${(frame.box[2] - frame.box[0]) * 100}%;height:${(frame.box[3] - frame.box[1]) * 100}%"></div>` : "";
+    tile.innerHTML = `<div class="pic loading"><img loading="lazy" src="${img(key, frame.name, 640)}" alt="Frame ${at + 1} of ${current.frames.length}">${box}` +
+      `<span class="wait" role="status">Loading…</span>` +
+      `<span class="tag">${frame.name === current.posted ? (current.withheld ? "top pick, not posted · " : "posted · ") : ""}${frame.box ? "" : "no pet · "}${frame.score.toFixed(2)}</span>` +
+      `<span class="state"></span></div>` +
+      `<div class="rate">` + [0, 1, 2, 3, -1].map((r) => `<button data-r="${r}"${r < 0 ? ' aria-label="Leave out of training"' : ""}>${r < 0 ? "✕" : NAMES[r]}</button>`).join("") +
+      `<a target="_blank" href="${img(key, frame.name, 0)}" aria-label="Open the full picture">⤢</a></div>`;
+    watch(tile.querySelector(".pic"));
+    tile.querySelector(".pic").onclick = () => rate(frame.name, marks[frame.name] >= 2 ? 0 : 2);
+    tile.querySelectorAll(".rate button").forEach((b) => b.onclick = () => rate(frame.name, Number(b.dataset.r)));
+    grid.appendChild(tile);
+  });
+  paint();
+  // Have the next visit examined, and its pictures fetched, while this one is being rated.
+  const index = visits.findIndex((v) => v.key === key);
+  const next = visits.slice(index + 1).find((v) => !v.labelled) || visits[index + 1];
+  if (next) visitDetail(next.key).then((ahead) =>
+    ahead.frames.filter((f) => !f.copy_of).slice(0, 8).forEach((f) => preload(next.key, f.name, 640))).catch(() => {});
+}
+function rate(name, rating) { marks[name] = rating; touched.add(name); paint(); }
+function shown(frame) {
+  return !frame.copy_of || $("show-copies").checked || (current.labelled && frame.rating !== null);
+}
+function paint() {
+  const counts = { 0: 0, 1: 0, 2: 0, 3: 0 };
+  for (const frame of current.frames) {
+    const tile = document.querySelector(`#frames .tile[data-name="${CSS.escape(frame.name)}"]`);
+    const mark = marks[frame.name], visible = shown(frame);
+    tile.className = "tile" + (visible ? "" : " hidden-copy") + (mark < 0 ? " out" : " r" + mark) +
+      (!current.labelled && !touched.has(frame.name) && mark > 0 ? " proposed" : "");
+    tile.querySelector(".state").textContent = NAMES[mark] + (frame.copy_of ? " · near-copy" : "");
+    tile.setAttribute("aria-label", `Frame ${tile.dataset.at}, ${NAMES[mark]}`);
+    tile.querySelectorAll(".rate button").forEach((b) => b.classList.toggle("on", Number(b.dataset.r) === mark));
+    if (visible && mark >= 0) counts[mark] += 1;
+  }
+  const parts = [[3, "best"], [2, "good"], [1, "okay"], [0, "bad"]].filter(([r]) => counts[r]).map(([r, n]) => `${counts[r]} ${n}`);
+  $("save").textContent = `Save · ${parts.join(", ") || "nothing rated"}`;
+}
+$("show-copies").onchange = () => current && paint();
+function nextVisit() {
+  const index = visits.findIndex((v) => v.key === current.key);
+  const later = visits.slice(index + 1);
+  const next = ($("only-new").checked ? later.find((v) => !v.labelled) : later[0]) || later[0];
+  if (next) openVisit(next.key);
+  // The last visit of the list: shown again, as rated.
+  else openVisit(current.key);
+}
+let saving = false;
+$("save").onclick = async () => {
+  // One save at a time: a held Enter key must not save twice and skip a visit.
+  if (!current || saving) return;
+  saving = true;
+  // The visit being saved: another may be opened before the server answers.
+  const visit = current;
+  $("save-said").textContent = "";
+  const labels = {};
+  for (const frame of visit.frames) if (shown(frame) && marks[frame.name] >= 0) labels[frame.name] = marks[frame.name];
+  try {
+    refreshStatus(await api("/api/label", { key: visit.key, labels }));
+    // The list is brought up to date here rather than fetched again, so the next visit opens at once.
+    const saved = visits.find((v) => v.key === visit.key);
+    if (saved) {
+      saved.labelled = true;
+      saved.good = Object.values(labels).filter((rating) => rating >= 2).length;
+      const row = [...$("list").children].find((r) => r.dataset.key === saved.key);
+      if (row) row.replaceWith(drawRow(saved));
+    }
+    details.delete(visit.key);
+    $("save-said").textContent = `Saved ${when(visit.started_at)} ✓`;
+    try { localStorage.setItem("pawst-has-rated", "1"); } catch (error) { /* private window */ }
+    $("label-how").open = false;
+    if (current === visit) nextVisit();
+  } catch (error) {
+    $("proposal-note").textContent = `Not saved: ${error.message || error}. Try again.`;
+  } finally { saving = false; }
+};
+$("skip").onclick = () => current && nextVisit();
+// The explanation is open until a visit has been rated on this browser.
+{ let rated = null; try { rated = localStorage.getItem("pawst-has-rated"); } catch (error) { /* private window */ } $("label-how").open = !rated; }
+
+// Comparison: the two picks are shown in random order and named only after the vote.
+let compare = null, compareAt = 0, leftIs = "model";
+const sameList = (a, b) => a.model === b.model && a.entries.length === b.entries.length &&
+  a.entries.every((entry, at) => entry.key === b.entries[at].key);
+async function loadCompare() {
+  const had = compare;
+  if (had) showCompare();
+  else {
+    $("compare-title").textContent = "Scoring recent visits with the model…";
+    $("compare-note").textContent = "A few seconds the first time.";
+    $("pair").innerHTML = ghosts(2, "Scoring…");
+  }
+  let fresh;
+  try { fresh = await api("/api/compare"); }
+  catch (error) {
+    if (!had) { $("compare-title").textContent = "The comparison could not be made"; $("compare-note").textContent = String(error.message || error); $("pair").innerHTML = ""; }
+    return;
+  }
+  // Shown already and nothing has changed: stay on the pair being looked at.
+  if (had && compare === had && sameList(had, fresh)) return;
+  compare = fresh;
+  compareAt = Math.max(0, compare.entries.findIndex((entry) => !entry.vote));
+  if (tab === "compare") showCompare();
+}
+function showCompare() {
+  if (!compare) return;
+  let buttons = document.querySelectorAll("[data-vote]");
+  if (!compare.model) {
+    $("compare-title").textContent = "No trained model yet";
+    $("compare-note").textContent = "Rate some visits, then train (step 2 · Train).";
+    $("pair").innerHTML = "";
+    buttons.forEach((b) => b.disabled = true); $("compare-next").disabled = true;
+    return;
+  }
+  $("compare-note").textContent = `Showing ${compare.entries.length} of the latest ${compare.looked_at} visits: those where the pickers ` +
+    `disagree and at least one pick is good. They agreed on ${compare.same}; in ${compare.neither} neither pick was good.`;
+  const entry = compare.entries[compareAt];
+  if (!entry) {
+    $("compare-title").textContent = "Nothing to compare";
+    $("pair").innerHTML = ""; buttons.forEach((b) => b.disabled = true); $("compare-next").disabled = true;
+    return;
+  }
+  leftIs = Math.random() < 0.5 ? "model" : "heuristic";
+  const rightIs = leftIs === "model" ? "heuristic" : "model";
+  $("compare-title").textContent = `${when(entry.started_at)} · ${compareAt + 1} of ${compare.entries.length}`;
+  $("pair").innerHTML = [leftIs, rightIs].map((side, at) => {
+    const where = at ? "right" : "left";
+    return `<figure data-side="${side}"><button class="pic loading" data-vote="${where}" aria-label="The ${where} photo is better">` +
+      `<img src="${img(entry.key, entry[side], 1280)}" alt="The ${where} photo"><span class="wait" role="status">Loading…</span></button>` +
+      `<div class="under"><button class="btn" data-vote="${where}">This one</button>` +
+      `<a target="_blank" href="${img(entry.key, entry[side], 0)}">Full size</a></div>` +
+      `<figcaption data-side="${side}"></figcaption></figure>`;
+  }).join("");
+  document.querySelectorAll("#pair .pic").forEach(watch);
+  buttons = document.querySelectorAll("[data-vote]");
+  buttons.forEach((b) => b.disabled = false);
+  $("compare-next").disabled = compareAt + 1 >= compare.entries.length;
+  if (entry.vote) reveal(entry);
+  // The next pair's pictures are fetched while this one is being judged.
+  const after = compare.entries[compareAt + 1];
+  if (after) for (const side of ["model", "heuristic"]) preload(after.key, after[side], 1280);
+}
+function reveal(entry) {
+  const names = { model: "Trained model", heuristic: "Built-in picker" };
+  document.querySelectorAll("#pair figure").forEach((figure) => figure.classList.toggle("chosen", figure.dataset.side === entry.vote));
+  document.querySelectorAll("#pair figcaption").forEach((caption) => {
+    const side = caption.dataset.side;
+    const score = entry[side + "_score"];
+    caption.textContent = names[side] + (score === null || score === undefined ? "" : ` · model score ${score.toFixed(2)}`) +
+      (entry.vote === side ? " · your pick" : entry.vote === "same" ? " · no difference" : "");
+  });
+}
+$("tab-compare").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-vote]");
+  if (button && !button.disabled) castVote(button.dataset.vote);
+});
+async function castVote(side) {
+  const entry = compare && compare.entries[compareAt];
+  if (!entry) return;
+  const rightIs = leftIs === "model" ? "heuristic" : "model";
+  const vote = side === "same" ? "same" : side === "left" ? leftIs : rightIs;
+  try { refreshStatus(await api("/api/vote", { key: entry.key, vote })); }
+  catch (error) { $("compare-note").textContent = "Vote not saved: " + String(error.message || error); return; }
+  entry.vote = vote;
+  // Only if it is still the pair on show: the next one must stay blind.
+  if (compare && compare.entries[compareAt] === entry) reveal(entry);
+}
+$("compare-next").onclick = () => { compareAt += 1; showCompare(); };
+
+// The frame under the pointer is looked up when a key is pressed, so it is right after scrolling.
+let pointer = null;
+document.addEventListener("mousemove", (event) => pointer = [event.clientX, event.clientY]);
+// A clicked button or checkbox must not keep the keyboard: Enter would press it again and
+// the rating keys would go to it instead of the frame under the pointer.
+document.addEventListener("click", (event) => {
+  const control = event.target.closest("button, input[type=checkbox], input[type=radio]");
+  if (control) control.blur();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  // Keys typed into a question or a field are for it.
+  if (document.querySelector("dialog[open]") || event.target.closest("input, select, textarea, summary, a, button")) return;
+  // The frame the keyboard is on, else the one under the pointer.
+  const under = pointer && document.elementFromPoint(pointer[0], pointer[1]);
+  const tile = (document.activeElement && document.activeElement.closest("#frames .tile")) || (under && under.closest("#frames .tile"));
+  hovered = tile ? tile.dataset.name : null;
+  if (tab === "label") {
+    if (event.key === "Enter") { event.preventDefault(); $("save").click(); }
+    if (event.key === "s" || event.key === "S") $("skip").click();
+    if (hovered && "0123".includes(event.key)) rate(hovered, Number(event.key));
+    if (hovered && event.key === " " && event.target.closest("#frames .tile")) { event.preventDefault(); rate(hovered, marks[hovered] >= 2 ? 0 : 2); }
+    if (hovered && (event.key === "x" || event.key === "X")) rate(hovered, -1);
+  } else if (tab === "compare") {
+    if (event.key === "1") castVote("left");
+    if (event.key === "2") castVote("same");
+    if (event.key === "3") castVote("right");
+    if (event.key === "ArrowRight" || event.key === "n") $("compare-next").click();
+  }
+});
+
+
+// The Camera tab: the directions around the camera, what each has yielded, and the plan.
+const LAYERS = {
+  photos: { value: (c) => c.photos, low: "none", high: "the most",
+    note: "The worth of each visit's best photo, by where the pet was in it. Point at a tile to see its best photo." },
+  found: { value: (c) => c.found, low: "none", high: "the most",
+    note: "The same worth, by where the pet was first seen. Home and stops are chosen from this." },
+  watched: { value: (c) => Math.sqrt(c.watched), low: "not watched", high: "watched most",
+    note: "Hours each direction was in view while waiting. Home takes nearly all, so the scale is stretched." },
+  next: { value: (c) => c.expected + 3 * exploreNow() * c.doubt, low: "least promising", high: "most promising",
+    note: "What the sweep goes by: expected worth per hour of watching, plus a bonus for directions it knows little about. Grey directions are out of the camera's reach and are never chosen." },
+};
+// One hue, light to dark; on a dark page the scale runs the other way so that little recedes.
+const RAMP = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"];
+const dark = () => matchMedia("(prefers-color-scheme: dark)").matches;
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+let viewData = null, layer = new URLSearchParams(location.search).get("layer") in LAYERS ? new URLSearchParams(location.search).get("layer") : "photos", orbit = { turn: -2.3, tilt: 0.45, zoom: 1 }, tiles = [], viewTimer = null;
+const exploreNow = () => Number($("explore").value) / 100;
+const patrolAfter = (explore) => Math.round(1200 * Math.pow(0.1, explore));
+
+function rampColor(share) {
+  const steps = dark() ? RAMP.slice().reverse() : RAMP;
+  return steps[Math.min(steps.length - 1, Math.floor(share * steps.length))];
+}
+// A direction as a point: yaw runs anticlockwise seen from above, pitch 90 is level and more
+// than that looks down.
+function point(yaw, pitch, radius) {
+  const a = yaw * Math.PI / 180, e = (90 - pitch) * Math.PI / 180;
+  return [radius * Math.cos(e) * Math.cos(a), radius * Math.cos(e) * Math.sin(a), radius * Math.sin(e)];
+}
+function projector(width, height) {
+  const ct = Math.cos(orbit.turn), st = Math.sin(orbit.turn), cl = Math.cos(orbit.tilt), sl = Math.sin(orbit.tilt);
+  const scale = Math.min(width, height) * 0.34 * orbit.zoom, far = 5;
+  return ([x, y, z]) => {
+    const x1 = x * ct - y * st, y1 = x * st + y * ct;
+    const y2 = y1 * cl - z * sl, z2 = y1 * sl + z * cl;
+    const depth = far + y2;
+    return [width / 2 + scale * x1 * far / depth, height / 2 - scale * z2 * far / depth, depth];
+  };
+}
+function planOutline(pose, radius) {
+  const [h, v] = viewData.map.fov, points = [];
+  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, -1]];
+  for (let i = 0; i < 4; i++) for (let t = 0; t < 8; t++) {
+    const a = corners[i], b = corners[i + 1], f = t / 8;
+    points.push(point(pose.yaw + (a[0] + (b[0] - a[0]) * f) * h / 2, pose.pitch + (a[1] + (b[1] - a[1]) * f) * v / 2, radius));
+  }
+  return points;
+}
+const samePlan = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+function allCells() {
+  // Every direction the camera can usefully face, so that ones it has never watched are drawn too.
+  const map = viewData.map, held = new Map(map.cells.map((c) => [c.yaw + "," + c.pitch, c]));
+  const unwatched = map.unwatched || { expected: 0, doubt: 0 }, cells = [];
+  // A map drawn by an older collector does not say what is in reach; everything is taken to be.
+  const seeable = map.seeable && new Set(map.seeable.map(([yaw, pitch]) => yaw + "," + pitch));
+  for (let yaw = 5; yaw < 360; yaw += 10) for (let pitch = 45; pitch < 170; pitch += 10) {
+    cells.push(held.get(yaw + "," + pitch) ||
+      { yaw, pitch, watched: 0, found: 0, photos: 0, expected: unwatched.expected, doubt: unwatched.doubt });
+  }
+  for (const c of map.cells) if (c.pitch < 45 || c.pitch > 165) cells.push(c);
+  for (const c of cells) c.off = !!seeable && !seeable.has(c.yaw + "," + c.pitch);
+  return cells;
+}
+
+function drawScene() {
+  const canvas = $("scene"), ratio = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth, height = canvas.clientHeight;
+  if (!width) return;
+  canvas.width = width * ratio; canvas.height = height * ratio;
+  const g = canvas.getContext("2d");
+  g.setTransform(ratio, 0, 0, ratio, 0, 0);
+  g.clearRect(0, 0, width, height);
+  tiles = [];
+  if (!viewData || !viewData.map) return;
+  const project = projector(width, height), ink = css("--ink"), muted = css("--muted"), surface = css("--bg");
+  const line = (points, color, lineWidth, dash) => {
+    g.beginPath();
+    points.forEach((p, i) => { const [x, y] = project(p); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.strokeStyle = color; g.lineWidth = lineWidth; g.setLineDash(dash || []); g.stroke(); g.setLineDash([]);
+  };
+  const label = (text, at, color) => {
+    const [x, y] = project(at);
+    g.font = "12px -apple-system, 'Segoe UI', sans-serif"; g.textAlign = "center";
+    g.lineWidth = 3; g.strokeStyle = surface; g.strokeText(text, x, y); g.fillStyle = color; g.fillText(text, x, y);
+  };
+  // The sphere of directions, faintly: level, and every 30 degrees around.
+  g.globalAlpha = 0.35;
+  for (const pitch of [60, 90, 120, 150]) {
+    line(Array.from({ length: 73 }, (_, i) => point(i * 5, pitch, 1)), muted, pitch === 90 ? 1.2 : 0.6);
+  }
+  for (let yaw = 0; yaw < 360; yaw += 30) line(Array.from({ length: 23 }, (_, i) => point(yaw, 40 + i * 6, 1)), muted, 0.6);
+  g.globalAlpha = 1;
+
+  const cells = allCells(), value = LAYERS[layer].value;
+  // What the camera cannot see is promising to nobody: it is left off that scale and drawn grey.
+  const grey = (cell) => layer === "next" && cell.off;
+  const scaled = cells.filter((cell) => !grey(cell)).map(value);
+  const most = Math.max(...scaled, 1e-9);
+  const least = layer === "next" && scaled.length ? Math.min(...scaled) : 0;
+  const drawn = [];
+  for (const cell of cells) {
+    const share = grey(cell) ? 0 : Math.max(0, (value(cell) - least) / (most - least || 1));
+    if (share <= 0 && layer !== "next") continue;
+    const radius = 1 + 0.3 * share;
+    const corners = [[-5, -5], [5, -5], [5, 5], [-5, 5]].map(([dy, dp]) => project(point(cell.yaw + dy, cell.pitch + dp, radius)));
+    drawn.push({ cell, share, grey: grey(cell), corners, depth: project(point(cell.yaw, cell.pitch, radius))[2] });
+  }
+  // Furthest first, so nearer tiles cover the ones behind them.
+  drawn.sort((a, b) => b.depth - a.depth);
+  for (const tile of drawn) {
+    g.beginPath();
+    tile.corners.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
+    g.closePath();
+    g.fillStyle = tile.grey ? css("--line") : rampColor(tile.share); g.fill();
+    g.strokeStyle = surface; g.lineWidth = 1.5; g.stroke();
+  }
+  tiles = drawn;
+
+  const origin = [0, 0, 0], [ox, oy] = project(origin);
+  const camera = viewData.map.camera, proposed = viewData.map.proposed;
+  const drawPlan = (plan, dash, sameHome) => {
+    const homeColor = css("--series-2");
+    if (!dash && plan.stops.length) {
+      line([plan.home, ...plan.stops, plan.home].map((p) => point(p.yaw, p.pitch, 1.36)), muted, 1, [2, 4]);
+    }
+    plan.stops.forEach((stop, i) => {
+      const at = point(stop.yaw, stop.pitch, 1.36), [x, y] = project(at);
+      g.beginPath(); g.arc(x, y, dash ? 5 : 9, 0, 2 * Math.PI);
+      g.fillStyle = surface; g.fill();
+      g.strokeStyle = dash ? muted : ink; g.lineWidth = dash ? 1.5 : 2; g.setLineDash(dash ? [3, 3] : []); g.stroke(); g.setLineDash([]);
+      if (!dash) { g.font = "11px -apple-system, 'Segoe UI', sans-serif"; g.textAlign = "center"; g.fillStyle = ink; g.fillText(String(i + 1), x, y + 4); }
+    });
+    // A learned home that is the home in use already is that outline; drawn once.
+    if (sameHome) return;
+    const outline = planOutline(plan.home, 1.4);
+    line(outline.concat([outline[0]]), dash ? muted : homeColor, dash ? 1.5 : 3, dash);
+    if (!dash) {
+      for (const i of [0, 8, 16, 24]) line([origin, outline[i]], homeColor, 1);
+      label("home", point(plan.home.yaw, plan.home.pitch - viewData.map.fov[1] / 2 - 4, 1.4), ink);
+    } else {
+      // Under its outline, where the label of the home in use, above its own, is not.
+      label("learned home", point(plan.home.yaw, plan.home.pitch + viewData.map.fov[1] / 2 + 6, 1.4), muted);
+    }
+  };
+  // Drawn first, so the numbered stops sit on top of the line to where it points.
+  const pose = viewData.pose && viewData.pose.pose;
+  if (pose) {
+    const tip = point(pose.yaw, pose.pitch, 1.46), [x, y] = project(tip);
+    line([origin, tip], ink, 1.5);
+    g.beginPath(); g.arc(x, y, 5, 0, 2 * Math.PI); g.fillStyle = ink; g.fill();
+    g.strokeStyle = surface; g.lineWidth = 2; g.stroke();
+  }
+  if (camera) drawPlan(camera.plan, null);
+  if (proposed && !(camera && samePlan(camera.plan, proposed))) drawPlan(proposed, [6, 5], camera && samePlan(camera.plan.home, proposed.home));
+  g.beginPath(); g.arc(ox, oy, 4, 0, 2 * Math.PI); g.fillStyle = ink; g.fill();
+  for (const yaw of [0, 90, 180, 270]) label(yaw + "°", point(yaw, 90, 1.62), muted);
+}
+
+function tileAt(x, y) {
+  for (let i = tiles.length - 1; i >= 0; i--) {
+    const c = tiles[i].corners;
+    let inside = false;
+    for (let a = 0, b = 3; a < 4; b = a++) {
+      if ((c[a][1] > y) !== (c[b][1] > y) && x < (c[b][0] - c[a][0]) * (y - c[a][1]) / (c[b][1] - c[a][1]) + c[a][0]) inside = !inside;
+    }
+    if (inside) return tiles[i];
+  }
+  return null;
+}
+const hours = (h) => h >= 1 ? h.toFixed(1) + " h" : Math.round(h * 60) + " min";
+function showTip(event) {
+  const tip = $("scene-tip"), box = $("scene").getBoundingClientRect();
+  const tile = tileAt(event.clientX - box.left, event.clientY - box.top);
+  if (!tile) { tip.classList.add("hide"); return; }
+  const c = tile.cell;
+  tip.innerHTML = `<b>yaw ${c.yaw - 5}–${c.yaw + 5}°, pitch ${c.pitch - 5}–${c.pitch + 5}°</b><br>
+    watched ${hours(c.watched)}<br>pet found here: worth ${c.found.toFixed(2)}<br>
+    photos here: worth ${c.photos.toFixed(2)}` + (c.off ? "<br>out of the camera's reach" : "") +
+    (c.best ? `<br>best photo, ${when(c.best.at)}${c.best.score == null ? "" : ", scored " + pct(c.best.score)}
+      <img src="${img(c.best.visit, c.best.frame, 400)}" alt="">` : "");
+  tip.classList.remove("hide");
+  const x = event.clientX - box.left + 14, y = event.clientY - box.top + 14;
+  tip.style.left = Math.min(x, box.width - 230) + "px";
+  tip.style.top = Math.min(y, box.height - (c.best ? 250 : 90)) + "px";
+}
+
+function drawViews() {
+  const { map, settings, pose } = viewData;
+  document.querySelectorAll("#layers .btn").forEach((b) => b.classList.toggle("on", b.dataset.layer === layer));
+  document.querySelectorAll("[data-mode]").forEach((b) => b.classList.toggle("on", b.dataset.mode === settings.mode));
+  $("layer-note").textContent = LAYERS[layer].note;
+  $("legend-low").textContent = LAYERS[layer].low; $("legend-high").textContent = LAYERS[layer].high;
+  $("legend-ramp").style.background = `linear-gradient(90deg, ${(dark() ? RAMP.slice().reverse() : RAMP).join(",")})`;
+  if (document.activeElement !== $("explore")) $("explore").value = Math.round(settings.explore * 100);
+  const explore = exploreNow();
+  $("explore-line").textContent = `Sweeps after ${Math.round(patrolAfter(explore) / 60)} minutes idle.` +
+    (settings.mode !== "learned" ? " Applies in Learned mode." : "");
+  if (!$("sweep-card").contains(document.activeElement) && !$("sweep-card").dataset.edited)
+    for (const name of SWEEP) $("sweep-" + name).value = settings[name] ?? viewData.sweep[name];
+  const reach = map && map.stopped_short && map.limits;
+  $("sweep-short").textContent = !reach ? "" :
+    `The camera was sent further than it could turn, so sweeps now keep to turn ${reach.yaw_low}–${reach.yaw_high}° and tilt ${reach.pitch_low}–${reach.pitch_high}°. Save to have it try the full ranges again.`;
+  $("moved-line").textContent = settings.since ? `Counting since ${when(settings.since)}.` : "Counting everything recorded.";
+  $("unmoved").classList.toggle("hide", !settings.since);
+  const problem = $("views-problem");
+  problem.textContent = "";
+  if (!map) {
+    $("views-following").textContent = "";
+    $("views-data").textContent = "";
+    problem.textContent = "The collector has not drawn the map yet. It appears within a minute of the collector starting.";
+  } else {
+    const plan = map.camera && map.camera.plan;
+    const say = (p) => `Home yaw ${Math.round(p.home.yaw)}°, pitch ${Math.round(p.home.pitch)}°; ${p.stops.length} stops; sweeps after ${Math.round(p.patrol_after / 60)} min idle.`;
+    $("views-following").textContent = !map.camera ? "" :
+      say(plan) + (settings.mode === "learned" && !map.camera.learned ? " The learned plan is on its way." : "");
+    $("views-data").textContent = `Map: ${map.visits} visits, ${hours(map.watched_hours)} of waiting, drawn ${when(map.drawn_at)}.` +
+      (pose && pose.pose && (pose.in_visit || pose.patrolling) ? (pose.in_visit ? " Following the pet now." : " On a sweep now.") : "");
+    if (!map.camera) problem.textContent = "The camera's agent is an older one that does not report where it points or take a plan. Deploy the agent (camera/agent/deploy.sh, then install_service.sh).";
+    else if (map.visits === 0) problem.textContent = "No visit has recorded where the camera pointed yet, so there is nothing to learn from. The map fills in with each visit.";
+    const rows = map.cells.slice().sort((a, b) => b.found + b.photos - a.found - a.photos || b.watched - a.watched);
+    $("views-table").innerHTML = "<table><tr><th>Yaw</th><th>Pitch</th><th>Watched</th><th>Found</th><th>Photos</th><th>Expected per hour</th></tr>" +
+      rows.map((c) => `<tr><td>${c.yaw - 5}–${c.yaw + 5}°</td><td>${c.pitch - 5}–${c.pitch + 5}°</td><td>${hours(c.watched)}</td>
+        <td>${c.found.toFixed(2)}</td><td>${c.photos.toFixed(2)}</td><td>${c.expected.toFixed(2)}</td></tr>`).join("") + "</table>";
+  }
+  drawScene();
+}
+let viewText = "";
+async function loadViews() {
+  const first = !viewData;
+  if (first) $("views-problem").textContent = "Loading the map…";
+  let fresh;
+  try { fresh = await api("/api/views"); } catch (error) { $("views-problem").textContent = String(error.message || error); viewText = ""; return; }
+  // Asked for every 15 seconds; drawn again only when something in it has changed.
+  const text = JSON.stringify(fresh);
+  if (!first && text === viewText) return;
+  viewText = text; viewData = fresh;
+  // Start with the camera's home facing the viewer.
+  const camera = viewData.map && viewData.map.camera;
+  if (first && camera) orbit.turn = -Math.PI / 2 - camera.plan.home.yaw * Math.PI / 180;
+  drawViews();
+}
+async function setViews(change) {
+  $("views-problem").textContent = "";
+  try { viewData = await api("/api/views", change); }
+  catch (error) {
+    $("views-problem").textContent = `Not changed: ${error.message || error}`;
+    // The slider may have been drawn ahead of the save; draw what is saved at the next poll.
+    viewText = "";
+    return;
+  }
+  drawViews();
+  // The collector redraws the map within a poll of a change; look again shortly.
+  setTimeout(() => tab === "views" && loadViews(), 20000);
+}
+// Aiming by hand.
+let aimData = null, aimBusy = false;
+function drawAim() {
+  const aim = aimData, problem = $("aim-problem");
+  const off = !aim || !!aim.problem || aimBusy;
+  document.querySelectorAll("#aim-card button").forEach((b) => b.disabled = off);
+  $("aim-look").disabled = aimBusy || picturing;
+  if (!aim) return;
+  if (aim.problem) { $("aim-line").textContent = ""; problem.textContent = `Aiming is not available: ${aim.problem}.`; $("aim-stops").innerHTML = ""; return; }
+  if (problem.textContent.startsWith("Aiming is not available")) problem.textContent = "";
+  const at = (p) => `yaw ${Math.round(p.yaw)}°, pitch ${Math.round(p.pitch)}°`;
+  $("aim-line").textContent = (aim.pose ? `Pointing at ${at(aim.pose)}. ` : "") +
+    (aim.tracking ? (aim.in_visit ? "Following the pet now." : "Follows the pet when one turns up.") : "Not following: it stays where you point it.");
+  $("aim-follow").classList.toggle("primary", !aim.tracking);
+  $("aim-follow").disabled = off || aim.tracking;
+  const plan = aim.plan;
+  $("aim-stops").innerHTML = !plan ? "" : `<p class="note">Home: ${at(plan.home)}. ${plan.stops.length ? "Stops, in order:" : "No stops."}</p>` +
+    plan.stops.map((stop, i) => `<div class="choice">${i + 1}. ${at(stop)} <button class="btn" data-drop="${i}"${off ? " disabled" : ""}>Remove</button></div>`).join("");
+  document.querySelectorAll("[data-drop]").forEach((b) => b.onclick = async () => {
+    const at = Number(b.dataset.drop);
+    if (await sure(`Remove stop ${at + 1} from the sweep?` + byHandNote(), "Remove")) setAim({ drop_stop: at }, true);
+  });
+}
+// What changing the plan by hand does to a camera that is learning it.
+const byHandNote = () => viewData && viewData.settings.mode !== "manual"
+  ? " This switches “Home and sweep” to Set by hand." : "";
+// A still of what the camera sees, asked for by hand and again after each turn.
+let picturing = false, pictureAgain = false, pictured = null;
+async function takePicture() {
+  // A turn made while a picture is on its way makes that picture old: take another after it.
+  if (picturing) { pictureAgain = true; return; }
+  picturing = true;
+  const box = $("aim-pic"), wait = $("aim-pic-wait");
+  box.classList.remove("hide"); box.classList.add("stale");
+  wait.className = "wait"; wait.textContent = "Getting a picture from the camera…";
+  $("aim-look").disabled = true;
+  try {
+    const response = await fetch("/api/aim/picture");
+    if (!response.ok) throw new Error((await response.json()).error || response.statusText);
+    const fresh = URL.createObjectURL(await response.blob());
+    $("aim-img").src = fresh;
+    if (pictured) URL.revokeObjectURL(pictured);
+    pictured = fresh;
+    box.classList.remove("stale"); wait.textContent = "";
+    $("aim-look").textContent = "Take the picture again";
+  } catch (error) {
+    wait.className = "wait err"; wait.textContent = `No picture: ${error.message || error}`;
+  }
+  picturing = false; drawAim();
+  if (pictureAgain) { pictureAgain = false; takePicture(); }
+}
+$("aim-look").onclick = takePicture;
+async function loadAim() {
+  if (aimBusy) return;
+  try { aimData = await api("/api/aim"); } catch (error) { aimData = { problem: String(error.message || error) }; }
+  drawAim();
+}
+async function setAim(change, planChanged) {
+  aimBusy = true; $("aim-problem").textContent = ""; drawAim();
+  try {
+    aimData = await api("/api/aim", change);
+    // The motors take a moment; ask again for where the camera ended up.
+    if (change.move) { await new Promise((done) => setTimeout(done, 1200)); aimData = await api("/api/aim"); }
+  } catch (error) { aimBusy = false; drawAim(); $("aim-problem").textContent = `Not done: ${error.message || error}`; if (planChanged) loadViews(); return; }
+  aimBusy = false; drawAim();
+  if (planChanged) loadViews();
+  if (change.move) takePicture();
+}
+// The first turn takes the camera off the pet; said once, not at every press.
+async function turn(move) {
+  if (aimData && aimData.tracking && !await sure("Turn the camera by hand? It stops following the pet until you press “Follow the pet again”.", "Turn it")) return;
+  setAim({ move });
+}
+document.querySelectorAll("[data-yaw]").forEach((b) => b.onclick = () => turn({ yaw: Number(b.dataset.yaw), pitch: 0 }));
+document.querySelectorAll("[data-pitch]").forEach((b) => b.onclick = () => turn({ yaw: 0, pitch: Number(b.dataset.pitch) }));
+$("aim-follow").onclick = () => setAim({ tracking: true });
+$("aim-home").onclick = async () => {
+  if (await sure("Make where the camera points now its home?" + byHandNote(), "Set as home")) setAim({ keep: "home" }, true);
+};
+$("aim-stop").onclick = async () => {
+  if (await sure("Add where the camera points now as a stop?" + byHandNote(), "Add as stop")) setAim({ keep: "stop" }, true);
+};
+const SWEEP = ["stops", "yaw_low", "yaw_high", "pitch_low", "pitch_high"];
+$("sweep-save").onclick = async () => {
+  const change = {};
+  $("sweep-saved").textContent = "";
+  for (const name of SWEEP) {
+    const typed = $("sweep-" + name).value.trim();
+    if (typed === "" || !Number.isFinite(Number(typed))) { $("views-problem").textContent = "Not changed: every sweep field needs a number."; return; }
+    change[name] = Number(typed);
+  }
+  document.activeElement.blur();
+  await setViews(change);
+  if (!$("views-problem").textContent.startsWith("Not changed")) { edited("sweep-saved", false); $("sweep-saved").className = "saved"; $("sweep-saved").textContent = "Saved."; }
+};
+document.querySelectorAll("#layers .btn").forEach((b) => b.onclick = () => { layer = b.dataset.layer; if (viewData) drawViews(); });
+document.querySelectorAll("[data-mode]").forEach((b) => b.onclick = () => setViews({ mode: b.dataset.mode }));
+$("explore").oninput = () => { if (viewData) { viewData.settings.explore = exploreNow(); drawViews(); } };
+$("explore").onchange = () => setViews({ explore: exploreNow() });
+$("moved").onclick = async () => {
+  if (await sure("Start the map again from now? “Count everything again” undoes this.", "Start again")) setViews({ moved: true });
+};
+$("unmoved").onclick = () => setViews({ moved: false });
+{
+  const canvas = $("scene");
+  let held = null;
+  canvas.addEventListener("pointerdown", (event) => { held = [event.clientX, event.clientY]; canvas.setPointerCapture(event.pointerId); $("scene-tip").classList.add("hide"); });
+  canvas.addEventListener("pointerup", () => held = null);
+  // A touch the browser took over to scroll the page.
+  canvas.addEventListener("pointercancel", () => held = null);
+  canvas.addEventListener("pointerleave", () => $("scene-tip").classList.add("hide"));
+  canvas.addEventListener("pointermove", (event) => {
+    if (!held) { showTip(event); return; }
+    orbit.turn += (event.clientX - held[0]) * 0.008;
+    orbit.tilt = Math.max(-1.4, Math.min(1.4, orbit.tilt + (event.clientY - held[1]) * 0.008));
+    held = [event.clientX, event.clientY];
+    drawScene();
+  });
+  canvas.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    orbit.zoom = Math.max(0.5, Math.min(3, orbit.zoom * Math.exp(-event.deltaY * 0.0015)));
+    drawScene();
+  }, { passive: false });
+  canvas.addEventListener("keydown", (event) => {
+    const step = { ArrowLeft: [-0.15, 0], ArrowRight: [0.15, 0], ArrowUp: [0, 0.1], ArrowDown: [0, -0.1] }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    orbit.turn += step[0]; orbit.tilt = Math.max(-1.4, Math.min(1.4, orbit.tilt + step[1]));
+    drawScene();
+  });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => viewData && drawViews());
+  window.addEventListener("resize", () => tab === "views" && drawScene());
+}
+
+// Settings.
+let settingsData = null, settingsFilled = false, testAsked = null;
+const ANIMALS = ["cat", "dog", "bird", "horse", "sheep", "cow", "bear", "elephant", "zebra", "giraffe"];
+// What a setting is now: what the page saved, else what the collector started with.
+function settingNow(name, fallback) {
+  const { saved, collector } = settingsData;
+  if (name in saved) return saved[name];
+  return collector && collector.settings && name in collector.settings ? collector.settings[name] : fallback;
+}
+function paceRows() {
+  $("deliver-every-wrap").classList.toggle("hide", $("deliver-pace").value !== "held");
+  $("keep-days-wrap").classList.toggle("hide", $("keep-pace").value !== "days");
+  $("webhook-rows").classList.toggle("hide", !$("deliver-webhook").checked);
+  $("command-row").classList.toggle("hide", !$("deliver-command").checked);
+}
+function captionExample() {
+  const name = $("subject").value.trim() || "pet";
+  let time = "";
+  try { time = new Date().toLocaleString("en-US", { timeZone: $("timezone").value.trim() || "UTC", weekday: "short", hour: "numeric", minute: "2-digit" }).replace(",", ""); }
+  catch (error) { $("caption-example").textContent = "Not a time zone the browser knows. Use a name such as America/New_York."; return; }
+  $("caption-example").textContent = `Example: “${name[0].toUpperCase() + name.slice(1)} visit ${time}, about 3 min.”`;
+}
+function fillSettings() {
+  const { posting } = settingsData;
+  const method = settingNow("deliver", "command");
+  $("deliver-command").checked = method !== "webhook";
+  $("deliver-webhook").checked = method === "webhook";
+  $("deliver-url").value = "";
+  $("deliver-clips").checked = settingNow("deliver_clips", false) === true;
+  const every = settingNow("deliver_every_minutes", null);
+  $("deliver-pace").value = every ? "held" : "each";
+  $("deliver-every").value = every || 60;
+  $("subject").value = settingNow("subject", "pet");
+  $("timezone").value = settingNow("timezone", "UTC");
+  const keep = settingNow("keep_visits_days", null);
+  $("keep-pace").value = keep ? "days" : "ever";
+  $("keep-days").value = keep || 30;
+  $("picker-model").checked = settingsData.active === "model";
+  $("picker-heuristic").checked = settingsData.active !== "model";
+  $("post-at-least").value = Math.round(posting.post_at_least * 100);
+  $("post-at-least-value").textContent = pct(posting.post_at_least);
+  const strictness = $("repeat-strictness");
+  if (![...strictness.options].some((o) => Number(o.value) === posting.repeat_strictness))
+    strictness.add(new Option(`are marked down (${posting.repeat_strictness})`, posting.repeat_strictness));
+  strictness.value = String(posting.repeat_strictness);
+  $("repeat-hours").value = Math.max(1, Math.round(posting.repeat_hours));
+  fillPets(); paceRows(); captionExample();
+}
+function fillPets() {
+  const { pets, known_pets } = settingsData;
+  const offered = [...ANIMALS.filter((name) => known_pets.includes(name)), ...pets.filter((name) => !ANIMALS.includes(name))];
+  $("pets").innerHTML = offered.map((name) => `<label><input type="checkbox" value="${escapeText(name)}"${pets.includes(name) ? " checked" : ""}> ${escapeText(name)}</label>`).join("") +
+    `<label>or another: <select id="pet-other"><option value="">…</option>${known_pets.filter((name) => !offered.includes(name)).map((name) => `<option>${escapeText(name)}</option>`).join("")}</select></label>`;
+}
+// What goes with the picker that is ticked: the threshold is the trained model's alone.
+function pickerRows() {
+  if (!settingsData) return;
+  const { has_model } = settingsData, model = $("picker-model").checked;
+  $("picker-model").disabled = !has_model;
+  $("picker-note").innerHTML = has_model
+    ? `Built-in: the frame where the pet is largest and most central. Trained: learned from your ratings; <a href="#model">see the test</a>.`
+    : `The trained model can be chosen once it is <a href="#model">trained</a>.`;
+  $("post-at-least").disabled = !model;
+  $("post-note").textContent = model
+    ? "Lower-scoring visits are archived, not posted. 0% posts every visit."
+    : "Only with the trained model; the built-in picker posts every visit.";
+}
+// The lines that say what the collector is doing with the settings; redrawn at every poll.
+function drawSettings() {
+  const { saved, collector } = settingsData;
+  const state = $("deliver-state"), problem = $("settings-problem");
+  problem.textContent = "";
+  $("command-line").textContent = collector && collector.command_program
+    ? `Runs ${collector.command_program}. Set as PETCAM_DELIVER_COMMAND in petcam.env.`
+    : "None set. Add PETCAM_DELIVER_COMMAND to petcam.env and install the collector again.";
+  $("deliver-command").disabled = !(collector && collector.command_program);
+  const host = saved.deliver_url_host || (collector && collector.settings.deliver_url_host);
+  $("deliver-url").placeholder = host ? `Now ${host}; type to replace` : "https://…";
+  pickerRows();
+  $("passphrase-note").textContent = settingsData.passphrase
+    ? "Changes ask for the passphrase once per browser tab."
+    : "No passphrase: anyone who can open this page can change it. Set PETCAM_PAGE_PASSPHRASE to require one.";
+  if (!collector) {
+    state.textContent = "";
+    problem.textContent = "The collector has not reported its settings. Install it again once; after that, changes here apply within 15 seconds.";
+  } else {
+    const now = collector.settings;
+    const pending = Object.keys(saved).filter((name) => saved[name] !== now[name] && !(name === "deliver_url_host" && saved[name] === null));
+    const how = now.deliver === "webhook" ? `to the webhook at ${now.deliver_url_host}` : now.deliver === "command" ? `by the ${collector.command_program || "delivery"} command` : "nowhere yet";
+    const pace = now.deliver_every_minutes ? `at most every ${now.deliver_every_minutes} minutes` : "as each visit arrives";
+    state.textContent = `Now sending ${how}, ${pace}.` + (collector.dry_run ? " Dry run: it logs instead of sending." : "");
+    if (collector.problem) problem.textContent = `The collector is not using what is saved here: ${collector.problem.replace("--deliver webhook needs --deliver-url", "sending to a webhook needs its address").replace("--deliver command needs --deliver-command", "there is no command in petcam.env")}.`;
+    else if (pending.length) state.textContent += " Your change applies within 15 seconds.";
+  }
+  const test = collector && collector.test;
+  if (testAsked && test && test.requested_at === testAsked) {
+    $("test-line").textContent = test.ok ? `Test sent ${when(test.at)}. Check where your postcards arrive.` : `Test not delivered: ${test.error}`;
+    $("test-line").className = test.ok ? "note" : "err";
+    $("deliver-test").disabled = false;
+  } else if (testAsked) {
+    const waited = settingsData.now - testAsked;
+    $("test-line").className = waited > 60 ? "err" : "note";
+    $("test-line").textContent = waited > 60 ? "No answer from the collector in a minute. Is it running? Check Home." : "Asked. Sending within 15 seconds…";
+    if (waited > 60) $("deliver-test").disabled = false;
+  }
+}
+// The camera's own timings.
+const TIMINGS = ["gone_after", "max_visit", "confirm_sightings", "home_after", "dwell"];
+let cameraFilled = false, cameraDown = false;
+let cameraData = null;
+function drawCamera(data, fill) {
+  cameraData = data;
+  $("camera-problem").textContent = data.problem ? `Not available: ${data.problem}.` : "";
+  $("camera-rows").classList.toggle("hide", !!data.problem);
+  if (data.problem) return;
+  for (const name of TIMINGS) {
+    const input = $("cam-" + name), known = name in data.values;
+    input.closest(".field").classList.toggle("hide", !known);
+    if (!known) continue;
+    [input.min, input.max] = data.limits[name];
+    if (fill) input.value = data.values[name];
+    $("cam-" + name + "-was").textContent = data.values[name] !== data.default[name] ? `(default ${data.default[name]})` : "";
+  }
+  $("camera-reset").classList.toggle("hide", !data.changed);
+}
+async function loadCamera() {
+  let data;
+  try { data = await api("/api/camera"); } catch (error) { data = { problem: String(error.message || error) }; }
+  drawCamera(data, !cameraFilled);
+  cameraDown = !!data.problem;
+  if (!data.problem) cameraFilled = true;
+}
+async function saveCamera(change, said) {
+  const note = $("camera-saved");
+  note.className = "saved"; note.textContent = "";
+  try { drawCamera(await api("/api/camera", change), true); }
+  catch (error) { note.className = "err"; note.textContent = ` Not saved: ${error.message || error}`; return; }
+  edited("camera-saved", false);
+  note.textContent = said;
+}
+$("camera-save").onclick = () => saveCamera(Object.fromEntries(TIMINGS.filter((name) => !$("cam-" + name).closest(".field").classList.contains("hide"))
+  .map((name) => [name, Number($("cam-" + name).value)])
+  // Only what was changed: the other timings keep following the camera's own settings.
+  .filter(([name, value]) => !cameraData || !cameraData.values || value !== cameraData.values[name])), "Saved on the camera.");
+$("camera-reset").onclick = async () => {
+  if (await sure("Restore the timings the camera was installed with?", "Restore")) saveCamera({ default: true }, "Defaults restored.");
+};
+
+async function loadSettings() {
+  try { settingsData = await api("/api/settings"); }
+  catch (error) { $("settings-problem").textContent = String(error.message || error); return; }
+  if (!settingsFilled) { settingsFilled = true; fillSettings(); }
+  drawSettings();
+}
+async function saveSettings(change, noteId, said) {
+  const note = $(noteId);
+  note.textContent = ""; note.className = "saved";
+  try { settingsData = await api("/api/settings", change); }
+  catch (error) { note.className = "err"; note.textContent = ` Not saved: ${error.message || error}`; return false; }
+  if (!("test" in change)) edited(noteId, false);
+  note.textContent = said || "Saved.";
+  drawSettings();
+  return true;
+}
+function deliveryChange() {
+  const change = { deliver: $("deliver-webhook").checked ? "webhook" : "command", deliver_clips: $("deliver-clips").checked,
+    deliver_every_minutes: $("deliver-pace").value === "held" ? Number($("deliver-every").value) : null };
+  if ($("deliver-url").value.trim()) change.deliver_url = $("deliver-url").value.trim();
+  return change;
+}
+$("deliver-save").onclick = async () => {
+  if (!settingsData) return;
+  const change = deliveryChange();
+  const host = settingsData.saved.deliver_url_host || (settingsData.collector && settingsData.collector.settings.deliver_url_host);
+  if (change.deliver_every_minutes !== null && !(change.deliver_every_minutes >= 1)) {
+    $("deliver-saved").className = "err"; $("deliver-saved").textContent = " Not saved: give the minutes between postcards."; return;
+  }
+  if (change.deliver === "webhook" && !change.deliver_url && !host) {
+    $("deliver-saved").className = "err"; $("deliver-saved").textContent = " Not saved: give the webhook's address."; return;
+  }
+  if (await saveSettings(change, "deliver-saved")) $("deliver-url").value = "";
+};
+$("deliver-test").onclick = async () => {
+  if ($("deliver-saved").closest(".card").dataset.edited) {
+    $("test-line").className = "err"; $("test-line").textContent = "Save first: a test uses the saved settings."; return;
+  }
+  $("deliver-test").disabled = true;
+  $("test-line").textContent = ""; testAsked = null;
+  if (await saveSettings({ test: true }, "deliver-saved", " ")) { testAsked = settingsData.test_at; drawSettings(); }
+  else $("deliver-test").disabled = false;
+};
+$("caption-save").onclick = () => saveSettings({ subject: $("subject").value, timezone: $("timezone").value.trim() }, "caption-saved", "Saved. Applies from the next visit.");
+$("posting-save").onclick = async () => {
+  if (!settingsData) return;
+  const picker = $("picker-model").checked ? "model" : "heuristic";
+  if (picker !== settingsData.active) {
+    try { refreshStatus(await api("/api/use", { selector: picker })); }
+    catch (error) { $("posting-saved").className = "err"; $("posting-saved").textContent = ` Not saved: ${error.message || error}`; return; }
+  }
+  saveSettings({ post_at_least: Number($("post-at-least").value) / 100,
+    repeat_strictness: Number($("repeat-strictness").value), repeat_hours: Math.max(1, Number($("repeat-hours").value)) }, "posting-saved", "Saved. Applies from the next visit.");
+};
+$("picker-model").onchange = $("picker-heuristic").onchange = pickerRows;
+$("pets-save").onclick = async () => {
+  if (!settingsData) return;
+  const pets = [...document.querySelectorAll("#pets input:checked")].map((box) => box.value);
+  if ($("pet-other").value) pets.push($("pet-other").value);
+  if (await saveSettings({ pets }, "pets-saved", settingsData.has_model ? "Saved. Train the model again." : "Saved.")) {
+    fillPets(); details.clear();
+    if (settingsData.camera_pets_problem) {
+      $("pets-saved").className = "err";
+      $("pets-saved").textContent = ` Saved for the photos, but the camera still follows what it did: ${settingsData.camera_pets_problem}. Save again once it answers.`;
+    }
+  }
+};
+$("keep-save").onclick = () => saveSettings({ keep_visits_days: $("keep-pace").value === "days" ? Number($("keep-days").value) : null }, "keep-saved");
+for (const id of ["deliver-pace", "keep-pace", "deliver-command", "deliver-webhook"]) $(id).onchange = paceRows;
+$("subject").oninput = $("timezone").oninput = captionExample;
+$("post-at-least").oninput = () => $("post-at-least-value").textContent = $("post-at-least").value + "%";
+try { $("zones").innerHTML = Intl.supportedValuesOf("timeZone").map((zone) => `<option value="${zone}">`).join(""); } catch (error) { /* an older browser: the name is typed */ }
+
+refreshStatus();
+window.addEventListener("resize", () => status && drawHistory(status.history || []));
+// A link ending in #label, #model, #compare, #views or #settings opens there; anything else, Home.
+const fromHash = () => show(TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "home");
+window.addEventListener("hashchange", fromHash);
+fromHash();
+</script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- ABOUTME: launchd job that keeps the selector page (labelling, settings, aiming) running on the -->
+<!-- ABOUTME: collector's Mac. render_plist.sh fills the @PLACEHOLDERS@ from petcam.env. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.petcam.page</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/env</string>
+        <string>uv</string>
+        <string>run</string>
+        <string>--python</string>
+        <string>3.12</string>
+        <string>--project</string>
+        <string>@COLLECTOR_HOME@/petcam/repo/selector</string>
+        <string>python</string>
+        <string>-m</string>
+        <string>selector</string>
+        <string>annotate</string>
+        <string>--host</string>
+        <string>@PAGE_HOST@</string>
+        <string>--port</string>
+        <string>@PAGE_PORT@</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:@COLLECTOR_HOME@/.local/bin:/usr/bin:/bin</string>
+        <key>PYTHONPATH</key>
+        <string>@COLLECTOR_HOME@/petcam/repo/selector</string>
+        <key>TZ</key>
+        <string>@TIMEZONE@</string>
+        @ENVIRONMENT@
+    </dict>
+    <key>WorkingDirectory</key>
+    <string>@COLLECTOR_HOME@/petcam/repo/selector</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+    <key>StandardOutPath</key>
+    <string>@COLLECTOR_HOME@/petcam/logs/selector.log</string>
+    <key>StandardErrorPath</key>
+    <string>@COLLECTOR_HOME@/petcam/logs/selector.log</string>
+</dict>
+</plist>

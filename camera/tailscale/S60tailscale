@@ -1,0 +1,40 @@
+#!/bin/sh
+# ABOUTME: Boot script that keeps tailscaled running on the reCamera in userspace-networking
+# ABOUTME: mode, since the stock kernel has no TUN driver. Binaries and state live on /userdata.
+
+TS_DIR=/userdata/tailscale
+SOCKET=/var/run/tailscale/tailscaled.sock
+# Seconds between tailscaled exiting and its next start.
+RESTART_DELAY=10
+
+case "$1" in
+    start)
+        mkdir -p /var/run/tailscale && chmod 755 /var/run/tailscale
+        # On a camera that is only reachable over the tailnet, a tailscaled that has exited
+        # means a trip to the camera, so this loop starts it again whenever it does.
+        (
+            while :; do
+                "$TS_DIR/tailscaled" --tun=userspace-networking \
+                    --state="$TS_DIR/tailscaled.state" --socket="$SOCKET" \
+                    --port=41641
+                sleep "$RESTART_DELAY"
+            done
+        ) < /dev/null > /dev/null 2>&1 &
+        ;;
+    stop)
+        # End the restart loop first so tailscaled stays down once it is killed.
+        for pid in $(ps -o pid,args | awk '/S60tailscale start$/ {print $1}'); do
+            kill "$pid" 2>/dev/null
+        done
+        killall tailscaled 2>/dev/null
+        ;;
+    restart)
+        "$0" stop
+        sleep 1
+        "$0" start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac

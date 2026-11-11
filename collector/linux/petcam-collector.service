@@ -1,0 +1,28 @@
+# ABOUTME: systemd user unit that keeps the collector running on a Linux computer.
+# ABOUTME: Assumes the repository is at ~/pawst-cards and uv at ~/.local/bin/uv; edit to suit.
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp collector/linux/petcam-collector.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now petcam-collector
+#   loginctl enable-linger "$USER"     # keep it running when you are logged out
+#   journalctl --user -u petcam-collector -f
+
+[Unit]
+Description=Pawst Cards collector: fetches pet visits from the camera and delivers the photos
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=%h/pawst-cards/collector
+# The same file the deploy scripts read. systemd reads NAME=value lines and double-quoted
+# values as a shell would, which is all petcam.env.example uses.
+EnvironmentFile=%h/pawst-cards/petcam.env
+# ffmpeg, and uv for the optional selector, have to be on this path.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/uv run python -m collector.service
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,15 @@
+#!/bin/sh
+# ABOUTME: Boot-time init script for the reCamera that starts the pet cam capture + RTSP
+# ABOUTME: pipeline in the background, which waits for sscma-node. Lives in /etc/init.d on the camera.
+
+case "$1" in
+    start)
+        /usr/local/bin/start_pipeline.sh >/dev/null 2>&1 &
+        ;;
+    stop|restart|reload)
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|reload}"
+        exit 1
+        ;;
+esac

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- ABOUTME: launchd job that keeps the pet cam collector running on an always-on Mac. -->
+<!-- ABOUTME: render_plist.sh fills the @PLACEHOLDERS@ from petcam.env; runs the collector with uv. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.petcam.collector</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/env</string>
+        <string>uv</string>
+        <string>run</string>
+        <string>--project</string>
+        <string>@COLLECTOR_HOME@/petcam/repo/collector</string>
+        <string>python</string>
+        <string>-m</string>
+        <string>collector.service</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:@COLLECTOR_HOME@/.local/bin:/usr/bin:/bin</string>
+        <key>TZ</key>
+        <string>@TIMEZONE@</string>
+        @ENVIRONMENT@
+    </dict>
+    <key>WorkingDirectory</key>
+    <string>@COLLECTOR_HOME@/petcam/repo/collector</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>@COLLECTOR_HOME@/petcam/logs/collector.log</string>
+    <key>StandardErrorPath</key>
+    <string>@COLLECTOR_HOME@/petcam/logs/collector.log</string>
+</dict>
+</plist>

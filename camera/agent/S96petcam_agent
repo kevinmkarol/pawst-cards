@@ -1,0 +1,65 @@
+#!/bin/sh
+# ABOUTME: Boot script for the pet cam agent. Builds the capture pipeline, then keeps the agent
+# ABOUTME: running from /userdata/petcam, logging to /userdata/petcam/agent.log.
+
+AGENT_DIR=/userdata/petcam
+LOG=/userdata/petcam/agent.log
+PIPELINE=/usr/local/bin/start_pipeline.sh
+# Seconds between the agent exiting and its next start.
+RESTART_DELAY=10
+# Flags for the agent, such as --home and --patrol, written here by install_service.sh from
+# PETCAM_PETS and PETCAM_AGENT_ARGS in petcam.env. One line, split on spaces.
+ARGS_FILE=/userdata/petcam/agent.args
+# Each time the agent starts, a log larger than this many bytes is moved to agent.log.1.
+LOG_LIMIT=5000000
+
+case "$1" in
+    start)
+        cd "$AGENT_DIR" || exit 1
+        touch "$LOG" && chmod 644 "$LOG"
+        # The agent has no other supervisor on the camera, so this loop starts it again whenever
+        # it exits.
+        (
+            while :; do
+                if [ "$(wc -c < "$LOG")" -gt "$LOG_LIMIT" ]; then
+                    mv "$LOG" "$LOG.1"
+                fi
+                # The agent's detection node needs the camera node, so the pipeline comes first.
+                # It takes a few seconds when the nodes already exist.
+                if [ -x "$PIPELINE" ]; then
+                    "$PIPELINE" >> "$LOG" 2>&1
+                fi
+                ARGS=""
+                if [ -f "$ARGS_FILE" ]; then
+                    ARGS="$(cat "$ARGS_FILE")"
+                fi
+                # Unquoted on purpose: the flags are separate words.
+                python3 -m petcam.agent $ARGS >> "$LOG" 2>&1
+                status=$?
+                echo "$(date -u '+%Y-%m-%d %H:%M:%S') agent exited with status $status," \
+                    "starting it again in $RESTART_DELAY s" >> "$LOG"
+                sleep "$RESTART_DELAY"
+            done
+        ) < /dev/null > /dev/null 2>&1 &
+        ;;
+    stop)
+        # End the restart loop first so the agent stays down once it is killed.
+        for pid in $(ps -o pid,args | awk '/S96petcam_agent start$/ {print $1}'); do
+            kill "$pid" 2>/dev/null
+        done
+        # Kill every running agent, including one started by hand. Match on
+        # the process's own arguments so shells merely mentioning the agent are left alone.
+        for pid in $(ps -o pid,args | awk '$2 == "python3" && $3 == "-m" && $4 == "petcam.agent" {print $1}'); do
+            kill "$pid" 2>/dev/null
+        done
+        ;;
+    restart)
+        "$0" stop
+        sleep 2
+        "$0" start
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac

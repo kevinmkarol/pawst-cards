@@ -1,0 +1,13 @@
+#!/bin/sh
+# ABOUTME: Runs the photo selector's tools from any directory: annotate, train, use, pets, status.
+# ABOUTME: Example: ./pawst-selector annotate, then ./pawst-selector use model.
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# The settings file, where there is one: an installed copy gets its values from launchd instead.
+if [ -f "$HERE/petcam.env" ]; then
+    set -a
+    . "$HERE/petcam.env"
+    set +a
+fi
+# The caller's directory is kept, so paths given as arguments mean what they say.
+PYTHONPATH="$HERE/selector${PYTHONPATH:+:$PYTHONPATH}" \
+    exec uv run --python 3.12 --project "$HERE/selector" python -m selector "$@"
